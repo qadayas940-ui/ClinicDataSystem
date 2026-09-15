@@ -1,52 +1,62 @@
 """
-سكربت إعداد قاعدة البيانات.
+سكريبت إعداد قاعدة البيانات والبيانات الأولية.
 
-- يضبط مسار البيانات ومتغيرات البيئة.
-- يطبّق ترحيلات Django (ينشئ قاعدة البيانات إن لم تكن موجودة).
-- يتحقق من وجود حساب مالك، وإن لم يوجد يوجّه المستخدم لإنشائه عبر الواجهة
-  أو تفاعلياً عبر سطر الأوامر.
+الاستخدام:
+    python scripts/init_db.py
+
+يقوم بـ:
+1. تطبيق ترحيلات Django (ينشئ قاعدة البيانات إن لم تكن موجودة)
+2. إنشاء البيانات الأولية (أدوار، أقسام، إصدار، ترخيص)
+3. التحقق من وجود حساب مالك وإرشاد المستخدم لإنشائه
 """
 import os
 import sys
 from pathlib import Path
 
-# إضافة جذر المشروع إلى المسار
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
 
-import django  # noqa: E402
-
+import django
 django.setup()
 
-from django.contrib.auth import get_user_model  # noqa: E402
-from django.core.management import call_command  # noqa: E402
-
-from apps.accounts.models import Role  # noqa: E402
+from django.core.management import call_command
+from django.contrib.auth import get_user_model
+from apps.accounts.models import Role
 
 User = get_user_model()
 
 
-def apply_migrations():
-    """تطبيق الترحيلات لإنشاء/تحديث قاعدة البيانات."""
-    print("جارٍ تطبيق ترحيلات قاعدة البيانات…")
-    call_command("makemigrations", interactive=False, verbosity=1)
-    call_command("migrate", interactive=False, verbosity=1)
-    print("تم تجهيز قاعدة البيانات بنجاح.")
+def main():
+    print("=" * 50)
+    print("  نظام إدارة بيانات العيادة - الإعداد الأولي")
+    print("=" * 50)
 
+    # 1. تطبيق الترحيلات
+    print("\n[1/3] تطبيق ترحيلات قاعدة البيانات...")
+    call_command("migrate", interactive=False, verbosity=0)
+    print("      ✅ تمت")
 
-def ensure_owner():
-    """التحقق من وجود مالك وإرشاد المستخدم لإنشائه إن لزم."""
+    # 2. إنشاء البيانات الأولية
+    print("\n[2/3] تهيئة البيانات الأولية...")
+    call_command("init_data")
+
+    # 3. التحقق من المالك
+    print("\n[3/3] التحقق من حساب المالك...")
     if User.objects.filter(role__code=Role.CODE_OWNER).exists():
-        print("يوجد حساب مالك مسبقاً. النظام جاهز.")
-        return
-    print("\n=== لا يوجد حساب مالك بعد ===")
-    print("لإنشاء حساب المالك الأول، شغّل التطبيق وافتح صفحة إعداد المالك:")
-    print("  /accounts/setup-owner/")
-    print("أو استخدم: python manage.py createsuperuser")
+        owner = User.objects.filter(role__code=Role.CODE_OWNER).first()
+        print(f"      ✅ يوجد حساب مالك: {owner.username}")
+    else:
+        print("      ⚠️  لا يوجد حساب مالك بعد.")
+        print("      افتح المتصفح على: http://127.0.0.1:8765/accounts/setup-owner/")
+        print("      أو نفذ: python manage.py createsuperuser")
+
+    print("\n" + "=" * 50)
+    print("  النظام جاهز للتشغيل!")
+    print("  شغّل: python launcher.py")
+    print("=" * 50)
 
 
 if __name__ == "__main__":
-    apply_migrations()
-    ensure_owner()
+    main()
