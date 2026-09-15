@@ -58,7 +58,7 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  ConfigDir, JsonPath, SafePath: String;
+  ConfigDir, JsonPath, SafePath, JsonContent: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -67,6 +67,8 @@ begin
     JsonPath := ConfigDir + '\desktop.json';
     SafePath := DataPage.Values[0];
     StringChangeEx(SafePath, '\', '/', True);
-    SaveStringToFile(JsonPath, '{"data_path":"' + SafePath + '","allow_lan":false,"port":8765}', False);
+    JsonContent := '{"data_path":"' + SafePath + '","allow_lan":false,"port":8765}';
+    if not SaveStringToUTF8File(JsonPath, JsonContent, False) then
+      RaiseException('تعذّر حفظ إعدادات مسار بيانات العيادة.');
   end;
 end;
