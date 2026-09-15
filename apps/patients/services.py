@@ -1,6 +1,7 @@
 import re
 import uuid
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
@@ -8,8 +9,20 @@ from .models import Patient, PatientAddress, PatientContact, PatientName
 
 
 def normalize_phone(value):
-    value = re.sub(r"[^0-9+]", "", (value or "").strip())
-    return "+" + value[2:] if value.startswith("00") else value
+    digits = re.sub(r"\D", "", value or "")
+    if not digits:
+        return ""
+    if digits.startswith("00"):
+        digits = digits[2:]
+    if digits.startswith("964"):
+        local = "0" + digits[3:]
+    elif digits.startswith("7"):
+        local = "0" + digits
+    else:
+        local = digits
+    if not re.fullmatch(r"07[578]\d{8}", local):
+        raise ValidationError("رقم الهاتف يجب أن يكون عراقياً صحيحاً من 11 رقم.")
+    return "+964" + local[1:]
 
 
 def _new_code():
