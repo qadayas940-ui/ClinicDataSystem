@@ -4,13 +4,19 @@ import logging
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.shortcuts import redirect, render
-from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
-from apps.core.utils import get_client_ip, log_audit
+from apps.core.utils import get_client_ip, log_audit, owner_required
 
-from .forms import ArabicLoginForm, ArabicPasswordChangeForm, OwnerSetupForm
+from .forms import (
+    ArabicLoginForm,
+    ArabicPasswordChangeForm,
+    OwnerSetupForm,
+    StaffUserForm,
+)
 from .models import User
 
 logger = logging.getLogger("clinic")
@@ -21,6 +27,7 @@ def _owner_exists():
     return User.objects.filter(role__code="owner").exists()
 
 
+@transaction.atomic
 def setup_owner(request):
     """إعداد حساب المالك الأول (يظهر فقط إن لم يوجد مالك بعد)."""
     if _owner_exists():
@@ -30,6 +37,9 @@ def setup_owner(request):
     if request.method == "POST":
         form = OwnerSetupForm(request.POST)
         if form.is_valid():
+            if User.objects.select_for_update().filter(role__code="owner").exists():
+                messages.info(request, "أنشأ جهاز آخر حساب المالك بالفعل. يرجى تسجيل الدخول.")
+                return redirect("accounts:login")
             user = form.save()
             log_audit(request, "create", model_name="User", object_id=str(user.pk), object_repr=user.username)
             messages.success(request, "تم إنشاء حساب المالك بنجاح. يمكنك الآن تسجيل الدخول.")
@@ -85,6 +95,7 @@ def login_view(request):
 
 
 @login_required
+@require_POST
 def logout_view(request):
     """تسجيل الخروج."""
     log_audit(request, "logout", model_name="User", object_id=str(request.user.pk), object_repr=request.user.username)
@@ -109,3 +120,39 @@ def change_password(request):
     else:
         form = ArabicPasswordChangeForm(request.user)
     return render(request, "accounts/change_password.html", {"form": form})
+
+
+@owner_required
+def user_list(request):
+    users = User.objects.select_related("role", "department").order_by("-is_active", "username")
+    return render(request, "accounts/user_list.html", {"users": users})
+
+
+@owner_required
+def user_create(request):
+    form = StaffUserForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        user = form.save(commit=False)
+        user.created_by = request.user
+        user.save()
+        log_audit(request, "create", "User", user.pk, user.username)
+        messages.success(request, "تم إنشاء حساب الموظف. سيُطلب منه تغيير كلمة المرور عند أول دخول.")
+        return redirect("accounts:user_list")
+    return render(request, "shared/form.html", {"form": form, "title": "إنشاء حساب موظف", "submit_label": "إنشاء الحساب"})
+
+
+@owner_required
+def user_edit(request, pk):
+    from django.shortcuts import get_object_or_404
+
+    user = get_object_or_404(User, pk=pk)
+    if user.is_owner:
+        messages.error(request, "حساب المالك يُدار من إعدادات المالك وتغيير كلمة المرور فقط.")
+        return redirect("accounts:user_list")
+    form = StaffUserForm(request.POST or None, instance=user)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        log_audit(request, "update", "User", user.pk, user.username)
+        messages.success(request, "تم تحديث الحساب.")
+        return redirect("accounts:user_list")
+    return render(request, "shared/form.html", {"form": form, "title": f"تعديل حساب {user.username}", "submit_label": "حفظ"})

@@ -1,6 +1,6 @@
-"""مسارات تطبيق visits (تُبنى في مرحلة لاحقة)."""
 from django.urls import path
 
-app_name = "visits"
+from . import views
 
-urlpatterns = []
+app_name = "visits"
+urlpatterns = [path("", views.visit_list, name="list"), path("new/", views.visit_create, name="create"), path("new/<uuid:patient_id>/", views.visit_create, name="create_for_patient")]

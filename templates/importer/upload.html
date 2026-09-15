@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block title %}استيراد Excel{% endblock %}{% block content %}
+<section class="page-head"><div><h1>📥 تحليل ملف Excel</h1><p>يحفظ المصدر كما هو، يفحص كل الأوراق والصفوف، ولا يدمج المرضى تلقائياً.</p></div></section>
+<div class="panel form-panel"><div class="notice warning"><b>قبل المتابعة</b><span>قد يستغرق الملف الكبير عدة دقائق. لا تغلق النافذة حتى تظهر النتيجة.</span></div><form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary" type="submit">رفع وتحليل الملف بالكامل</button></form></div>
+{% endblock %}

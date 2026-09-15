@@ -101,3 +101,35 @@ class ArabicPasswordChangeForm(PasswordChangeForm):
         self.fields["new_password2"].label = "تأكيد كلمة المرور الجديدة"
         for field in self.fields.values():
             field.widget.attrs.update({"class": "form-control form-control-lg", "dir": "ltr"})
+
+
+class StaffUserForm(forms.ModelForm):
+    password = forms.CharField(label="كلمة المرور المؤقتة", widget=forms.PasswordInput, required=False)
+
+    class Meta:
+        model = User
+        fields = ["username", "first_name", "last_name", "email", "role", "department", "is_active"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["role"].queryset = Role.objects.exclude(code=Role.CODE_OWNER)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")
+        if not self.instance.pk:
+            self.fields["password"].required = True
+
+    def clean_password(self):
+        password = self.cleaned_data.get("password")
+        if password:
+            validate_password(password, self.instance)
+        return password
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        password = self.cleaned_data.get("password")
+        if password:
+            user.set_password(password)
+            user.is_force_password_change = True
+        if commit:
+            user.save()
+        return user

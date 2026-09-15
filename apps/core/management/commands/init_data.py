@@ -5,9 +5,10 @@
 - إصدار البرنامج الحالي
 - حالة الترخيص التجريبي
 """
+from datetime import timedelta
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from datetime import timedelta
 
 
 class Command(BaseCommand):
@@ -18,6 +19,7 @@ class Command(BaseCommand):
         self._create_departments()
         self._create_app_version()
         self._create_license()
+        self._create_server_settings()
         self.stdout.write(self.style.SUCCESS("✅ تمت تهيئة البيانات الأولية بنجاح."))
 
     def _create_roles(self):
@@ -36,10 +38,10 @@ class Command(BaseCommand):
     def _create_departments(self):
         from apps.core.models import Department
         depts = [
-            {"code": "GENERAL", "name": "العيادة العامة"},
-            {"code": "LAB",     "name": "المختبر"},
-            {"code": "EYE",     "name": "عيادة العيون"},
-            {"code": "REF",     "name": "الإحالات"},
+            {"code": "GENERAL", "name": "العيادة العامة", "department_type": "clinic"},
+            {"code": "LAB",     "name": "المختبر", "department_type": "laboratory"},
+            {"code": "EYE",     "name": "عيادة العيون", "department_type": "clinic"},
+            {"code": "REF",     "name": "الإحالات", "department_type": "administration"},
         ]
         for dd in depts:
             _, created = Department.objects.get_or_create(code=dd["code"], defaults=dd)
@@ -74,3 +76,7 @@ class Command(BaseCommand):
             mode="trial",
         )
         self.stdout.write("  + حالة الترخيص التجريبي (30 يوم)")
+
+    def _create_server_settings(self):
+        from apps.core.models import ServerSettings
+        ServerSettings.objects.get_or_create(pk=1, defaults={"port": 8765, "allow_network_access": False, "bind_address": "127.0.0.1"})

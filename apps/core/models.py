@@ -76,9 +76,15 @@ class SoftDeleteModel(TimeStampedModel):
 class Department(SoftDeleteModel):
     """قسم داخل المنشأة (مثال: العيون، المختبر، الاستقبال)."""
 
+    TYPE_CHOICES = [
+        ("clinic", "عيادة"), ("laboratory", "مختبر"),
+        ("diagnostic", "خدمة تشخيصية"), ("administration", "إدارة"),
+    ]
+
     name = models.CharField("اسم القسم", max_length=120)
     code = models.CharField("الرمز", max_length=40, unique=True)
     description = models.TextField("الوصف", blank=True, default="")
+    department_type = models.CharField("نوع القسم", max_length=20, choices=TYPE_CHOICES, default="clinic")
     is_active = models.BooleanField("نشط", default=True)
 
     class Meta:

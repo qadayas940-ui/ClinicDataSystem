@@ -1,6 +1,6 @@
-"""مسارات تطبيق backup (تُبنى في مرحلة لاحقة)."""
 from django.urls import path
 
-app_name = "backup"
+from . import views
 
-urlpatterns = []
+app_name = "backup"
+urlpatterns = [path("", views.backup_list, name="list"), path("create/", views.backup_create, name="create"), path("<int:pk>/download/", views.backup_download, name="download"), path("export/excel/", views.excel_export, name="excel_export")]

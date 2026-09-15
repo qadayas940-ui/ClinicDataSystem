@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — {{ APP_NAME }}{% endblock %}
+{% block content %}
+<section class="page-head"><div><h1>{{ title }}</h1><p>الحقول المعلّمة بنجمة مطلوبة.</p></div></section>
+<form method="post" class="panel form-panel" novalidate>
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+  <div class="form-grid">
+    {% for field in form %}
+      <div class="field{% if field.errors %} field-error{% endif %}">
+        <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}</label>
+        {{ field }}
+        {% for error in field.errors %}<small class="error-text">{{ error }}</small>{% endfor %}
+        {% if field.help_text %}<small class="help-text">{{ field.help_text }}</small>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="form-actions"><button class="btn btn-primary" type="submit">{{ submit_label|default:"حفظ" }}</button><button class="btn btn-secondary" type="button" onclick="history.back()">رجوع</button></div>
+</form>
+{% endblock %}

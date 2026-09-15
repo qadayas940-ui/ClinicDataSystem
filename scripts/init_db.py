@@ -19,10 +19,12 @@ sys.path.insert(0, str(BASE_DIR))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.development")
 
 import django
+
 django.setup()
 
-from django.core.management import call_command
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
+
 from apps.accounts.models import Role
 
 User = get_user_model()

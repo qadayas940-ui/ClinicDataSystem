@@ -146,9 +146,7 @@ class User(AbstractUser):
     @property
     def is_locked(self):
         """هل الحساب مقفل حالياً؟"""
-        if self.locked_until and self.locked_until > timezone.now():
-            return True
-        return False
+        return bool(self.locked_until and self.locked_until > timezone.now())
 
     def lock_account(self, minutes):
         """قفل الحساب لمدة محددة بالدقائق."""
