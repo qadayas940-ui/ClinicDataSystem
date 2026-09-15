@@ -27,6 +27,10 @@ class ImportBatch(SoftDeleteModel):
     imported_by = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="استوردها", on_delete=models.SET_NULL, null=True, blank=True, related_name="import_batches")
     completed_at = models.DateTimeField("اكتملت في", null=True, blank=True)
     notes = models.TextField("ملاحظات", blank=True, default="")
+    previous_batch = models.ForeignKey(
+        "self", verbose_name="الدفعة السابقة", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="newer_batches",
+    )
 
     class Meta:
         verbose_name = "دفعة استيراد"
@@ -83,6 +87,13 @@ class SourceRow(models.Model):
         ("accepted", "مقبول"),
         ("rejected", "مرفوض"),
     ]
+    CLASSIFICATION_CHOICES = [
+        ("ready", "جاهز للاستيراد"),
+        ("review", "يحتاج مراجعة"),
+        ("blocking", "خطأ مانع"),
+        ("duplicate", "تكرار محتمل"),
+        ("repeat_visit", "زيارة متكررة محتملة"),
+    ]
 
     batch = models.ForeignKey(ImportBatch, verbose_name="الدفعة", on_delete=models.CASCADE, related_name="rows")
     sheet = models.ForeignKey(ImportSheet, verbose_name="الورقة", on_delete=models.CASCADE, related_name="rows")
@@ -91,11 +102,21 @@ class SourceRow(models.Model):
     row_hash = models.CharField("بصمة الصف", max_length=64, db_index=True)
     status = models.CharField("الحالة", max_length=20, choices=STATUS_CHOICES, default="pending")
     issues_count = models.PositiveIntegerField("عدد المشاكل", default=0)
+    classification = models.CharField("التصنيف", max_length=20, choices=CLASSIFICATION_CHOICES, default="ready", db_index=True)
+    flag_reasons = models.JSONField("أسباب الإشارة", default=list, blank=True)
+    normalized_name = models.CharField("الاسم المطبّع", max_length=255, blank=True, default="", db_index=True)
+    linked_patient = models.ForeignKey(
+        "patients.Patient", verbose_name="المريض المرتبط", on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="source_rows",
+    )
 
     class Meta:
         verbose_name = "صف مصدري"
         verbose_name_plural = "الصفوف المصدرية"
         ordering = ["original_row_number"]
+        constraints = [
+            models.UniqueConstraint(fields=["batch", "sheet", "original_row_number"], name="uniq_source_row_location"),
+        ]
 
     def __str__(self):
         return f"صف {self.original_row_number}"

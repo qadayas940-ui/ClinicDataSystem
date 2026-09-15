@@ -1,5 +1,5 @@
 """اختبارات المصادقة: تسجيل الدخول، القفل، إعداد المالك، تغيير كلمة المرور."""
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -41,6 +41,8 @@ class LoginTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.wsgi_request.user.is_authenticated)
+        # لا توجد خلفية مصادقة ثانية تتجاوز القفل.
+        self.assertIsNone(authenticate(username="doctor", password="CorrectPass123"))
 
     def test_successful_login_resets_counter(self):
         self.client.post(self.login_url, {"username": "doctor", "password": "wrong"})

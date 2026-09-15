@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "channel": "stable",
+  "update_type": "optional",
+  "download_url": "https://example.invalid/ClinicDataSystem-Setup.exe",
+  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "min_supported_version": "1.0.0",
+  "is_mandatory": false,
+  "allow_postpone": true,
+  "grace_period_days": 30,
+  "message_ar": "مثال فقط؛ لا يُنشر قبل وضع رابط وبصمة المثبت الحقيقيين."
+}

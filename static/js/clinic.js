@@ -1,17 +1,1 @@
-// سكربتات واجهة نظام العيادة
-(function () {
-    "use strict";
-
-    // إخفاء رسائل التنبيه تلقائياً بعد 6 ثوانٍ
-    document.addEventListener("DOMContentLoaded", function () {
-        const alerts = document.querySelectorAll(".alert-dismissible");
-        alerts.forEach(function (alert) {
-            setTimeout(function () {
-                try {
-                    const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
-                    bsAlert.close();
-                } catch (e) { /* تجاهل */ }
-            }, 6000);
-        });
-    });
-})();
+(function(){"use strict";document.addEventListener("DOMContentLoaded",function(){var button=document.querySelector("[data-menu-toggle]"),menu=document.querySelector("[data-menu]");if(button&&menu){button.addEventListener("click",function(){menu.classList.toggle("open")})}document.querySelectorAll("[data-dismiss]").forEach(function(item){item.addEventListener("click",function(){item.parentElement.remove()})});document.querySelectorAll("form[data-confirm]").forEach(function(form){form.addEventListener("submit",function(event){if(!window.confirm(form.dataset.confirm)){event.preventDefault()}})})})})();

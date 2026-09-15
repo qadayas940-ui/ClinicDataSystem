@@ -6,3 +6,6 @@ class CoreConfig(AppConfig):
     name = "apps.core"
     label = "core"
     verbose_name = "النواة"
+
+    def ready(self):
+        from . import signals  # noqa: F401

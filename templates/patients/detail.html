@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ patient.display_name }} — {{ APP_NAME }}{% endblock %}
+{% block content %}
+<section class="page-head"><div><span class="eyebrow">{{ patient.internal_code }}</span><h1>{{ patient.display_name }}</h1><p>ملف دائم — لا يُعاد إنشاؤه عند كل زيارة.</p></div><div class="button-row"><a class="btn btn-primary" href="{% url 'visits:create_for_patient' patient.pk %}">+ زيارة</a><a class="btn btn-secondary" href="{% url 'patients:edit' patient.pk %}">تعديل</a></div></section>
+<div class="patient-summary"><div class="record-card">
+  <div><span>الرقم التعريفي</span><strong>{{ patient.internal_code }}</strong></div><div><span>الجنس</span><strong>{{ patient.get_gender_display }}</strong></div><div><span>العمر الحالي</span><strong>{{ patient.calculated_age }}</strong></div>
+  <div><span>تاريخ الميلاد</span><strong>{{ patient.date_of_birth|date:"Y/m/d"|default:"—" }}</strong></div><div><span>الهاتف</span><strong>{{ patient.contacts.first.value|default:"—" }}</strong></div><div><span>العنوان</span><strong>{{ patient.addresses.first.text|default:"—" }}</strong></div>
+</div><div class="qr-card"><img src="{% url 'patients:qr' patient.pk %}" alt="QR"><small>رمز داخلي بلا اسم أو بيانات طبية</small></div></div>
+<div class="module-grid"><a class="module-card" href="{% url 'visits:list' %}?patient={{ patient.pk }}"><b>🩺 الزيارات</b><span>{{ patient.visits.count }} سجل</span></a><a class="module-card" href="{% url 'laboratory:list' %}?patient={{ patient.pk }}"><b>🧪 المختبر</b><span>{{ patient.lab_orders.count }} طلب</span></a><a class="module-card" href="{% url 'referrals:list' %}?patient={{ patient.pk }}"><b>↗️ الإحالات</b><span>{{ patient.referrals.count }} إحالة</span></a><a class="module-card" href="{% url 'ophthalmology:list' %}?patient={{ patient.pk }}"><b>👁️ العيون</b><span>{{ patient.eye_visits.count }} زيارة</span></a></div>
+{% endblock %}

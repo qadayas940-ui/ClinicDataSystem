@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}المرضى — {{ APP_NAME }}{% endblock %}
+{% block content %}
+<section class="page-head"><div><h1>👥 ملفات المرضى</h1><p>ابحث بالرقم أو الاسم أو الهاتف أو العنوان.</p></div><a class="btn btn-primary" href="{% url 'patients:create' %}">+ مريض جديد</a></section>
+<form class="search-bar" method="get"><input name="q" value="{{ query }}" placeholder="اكتب الاسم، الرمز أو الهاتف…" autofocus><button class="btn btn-primary">بحث</button></form>
+<div class="panel table-wrap"><table><thead><tr><th>الرقم التعريفي</th><th>الاسم</th><th>الجنس</th><th>العمر</th><th>الهاتف</th><th></th></tr></thead><tbody>
+{% for patient in page %}<tr class="valid-row"><td><span class="code">{{ patient.internal_code }}</span></td><td>{{ patient.display_name }}</td><td>{{ patient.get_gender_display }}</td><td>{{ patient.calculated_age }}</td><td>{{ patient.contacts.first.value|default:"—" }}</td><td><a href="{% url 'patients:detail' patient.pk %}">فتح الملف</a></td></tr>{% empty %}<tr><td colspan="6" class="empty-state">لا توجد نتائج.</td></tr>{% endfor %}
+</tbody></table></div>
+{% include "shared/pagination.html" with page=page %}
+{% endblock %}

@@ -1,6 +1,7 @@
 """اختبارات واجهة فحص الصحة."""
 import json
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
@@ -18,13 +19,14 @@ class HealthCheckTests(TestCase):
         url = reverse("core:health_api")
         response = self.client.get(url)
         data = json.loads(response.content)
-        for key in ("status", "version", "db_status", "db_size_mb",
-                    "trial_days_remaining", "server_time", "users_count"):
+        for key in ("status", "version"):
             self.assertIn(key, data)
         self.assertEqual(data["status"], "ok")
-        self.assertEqual(data["db_status"], "connected")
+        self.assertNotIn("users_count", data)
 
     def test_health_db_connected(self):
+        user = get_user_model().objects.create_user(username="health", password="StrongPass123")
+        self.client.force_login(user)
         url = reverse("core:health_api")
         data = json.loads(self.client.get(url).content)
         self.assertEqual(data["db_status"], "connected")

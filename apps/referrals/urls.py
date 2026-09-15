@@ -1,6 +1,6 @@
-"""مسارات تطبيق referrals (تُبنى في مرحلة لاحقة)."""
 from django.urls import path
 
-app_name = "referrals"
+from . import views
 
-urlpatterns = []
+app_name = "referrals"
+urlpatterns = [path("", views.referral_list, name="list"), path("new/", views.referral_create, name="create"), path("new/<uuid:patient_id>/", views.referral_create, name="create_for_patient")]

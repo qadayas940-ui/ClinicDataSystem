@@ -1,12 +1,28 @@
 """أدوات مساعدة مشتركة للنواة."""
 import logging
 
+from django.contrib.auth.decorators import user_passes_test
+
 logger = logging.getLogger("clinic")
 
 # حقول حساسة يجب عدم تسجيلها أبداً
 SENSITIVE_FIELDS = {"password", "password1", "password2", "old_password",
                     "new_password1", "new_password2", "national_id", "license_key",
                     "csrfmiddlewaretoken"}
+
+
+def owner_required(view_func):
+    """قصر العرض على مالك النظام مع إعادة آمنة لصفحة الدخول."""
+    return user_passes_test(lambda user: user.is_authenticated and user.is_owner, login_url="accounts:login")(view_func)
+
+
+def roles_required(*role_codes):
+    """قصر العرض على أدوار محددة مع اعتبار المالك مخولاً دائماً."""
+    return user_passes_test(
+        lambda user: user.is_authenticated
+        and (user.is_owner or (user.role and user.role.code in role_codes)),
+        login_url="accounts:login",
+    )
 
 
 def get_client_ip(request):

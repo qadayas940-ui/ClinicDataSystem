@@ -1,6 +1,6 @@
-"""مسارات تطبيق updater (تُبنى في مرحلة لاحقة)."""
 from django.urls import path
 
-app_name = "updater"
+from . import views
 
-urlpatterns = []
+app_name = "updater"
+urlpatterns = [path("", views.update_list, name="list"), path("check/", views.update_check, name="check")]

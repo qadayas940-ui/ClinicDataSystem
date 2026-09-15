@@ -6,9 +6,11 @@
 بوضع قاعدة البيانات والملفات في موقع خارجي (مثل مجلد بيانات على القرص).
 """
 import os
+import platform
 from pathlib import Path
 
-from decouple import Config, RepositoryEnv, config as env_config
+from decouple import Config, RepositoryEnv
+from decouple import config as env_config
 
 # BASE_DIR = جذر المشروع (المجلد الذي يحوي manage.py)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -24,7 +26,21 @@ else:
 # مسار البيانات: قاعدة البيانات + الملفات المرفوعة + الترخيص + السجلات
 # يمكن تجاوزه عبر متغير البيئة DATA_PATH (مفيد للنسخة التشغيلية على Windows)
 # ---------------------------------------------------------------------------
-DATA_PATH = Path(config("DATA_PATH", default=str(BASE_DIR / "data")))
+def _default_data_path():
+    """اختيار مسار بيانات مستقل عن ملفات البرنامج."""
+    if platform.system() == "Windows":
+        root = os.environ.get("PROGRAMDATA") or os.environ.get("LOCALAPPDATA")
+        if root:
+            return str(Path(root) / "ClinicDataSystem")
+    return str(Path.home() / ".clinic_data_system")
+
+
+DATA_PATH = Path(
+    config(
+        "CLINIC_DATA_PATH",
+        default=config("DATA_PATH", default=_default_data_path()),
+    )
+).expanduser().resolve()
 DATABASE_DIR = DATA_PATH / "database"
 UPLOADS_DIR = DATA_PATH / "uploads"
 LICENSE_DIR = DATA_PATH / "license"
@@ -37,10 +53,7 @@ for _d in (DATABASE_DIR, UPLOADS_DIR, LICENSE_DIR, LOGS_DIR):
 # ---------------------------------------------------------------------------
 # الأمان
 # ---------------------------------------------------------------------------
-SECRET_KEY = config(
-    "SECRET_KEY",
-    default="django-insecure-change-me-in-production-0000000000000000000000",
-)
+SECRET_KEY = config("SECRET_KEY", default="clinic-development-only-secret")
 
 DEBUG = config("DEBUG", default=False, cast=bool)
 
@@ -82,6 +95,8 @@ INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
 # ---------------------------------------------------------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "apps.core.middleware.PrivateNetworkHostMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -91,6 +106,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # وسيط تسجيل العمليات المهمة (بدون بيانات حساسة)
     "apps.core.middleware.AuditLogMiddleware",
+    "apps.core.middleware.TrialReadOnlyMiddleware",
     # وسيط إجبار تغيير كلمة المرور المؤقتة
     "apps.accounts.middleware.ForcePasswordChangeMiddleware",
 ]
@@ -126,6 +142,7 @@ DATABASES = {
         "NAME": str(DATABASE_DIR / "clinic.db"),
         "OPTIONS": {
             "timeout": 20,
+            "transaction_mode": "IMMEDIATE",
         },
     }
 }
@@ -137,7 +154,6 @@ AUTH_USER_MODEL = "accounts.User"
 
 AUTHENTICATION_BACKENDS = [
     "apps.accounts.backends.LockoutModelBackend",
-    "django.contrib.auth.backends.ModelBackend",
 ]
 
 LOGIN_URL = "accounts:login"
@@ -172,7 +188,7 @@ LOGIN_LOCKOUT_MINUTES = config("LOGIN_LOCKOUT_MINUTES", default=10, cast=int)
 # اللغة والوقت
 # ---------------------------------------------------------------------------
 LANGUAGE_CODE = "ar"
-TIME_ZONE = "Asia/Riyadh"
+TIME_ZONE = "Asia/Baghdad"
 USE_I18N = True
 USE_TZ = True
 
@@ -181,7 +197,11 @@ USE_TZ = True
 # ---------------------------------------------------------------------------
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_ROOT = DATA_PATH / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = UPLOADS_DIR
@@ -203,6 +223,14 @@ APP_VERSION = "1.0.0"
 DB_SCHEMA_VERSION = "1"
 FACILITY_NAME = config("FACILITY_NAME", default="العيادة")
 DEFAULT_TRIAL_DAYS = config("DEFAULT_TRIAL_DAYS", default=30, cast=int)
+UPDATE_MANIFEST_URL = config("UPDATE_MANIFEST_URL", default="")
+CLINIC_READ_ONLY_EXEMPT_PATHS = (
+    "/accounts/login/",
+    "/accounts/logout/",
+    "/accounts/change-password/",
+    "/backup/",
+    "/api/health/",
+)
 
 # ---------------------------------------------------------------------------
 # السجلات (Logging) — لا تُسجَّل بيانات حساسة

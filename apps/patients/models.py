@@ -8,6 +8,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from apps.core.models import SoftDeleteModel
 
@@ -60,12 +61,31 @@ class Patient(SoftDeleteModel):
     def __str__(self):
         return self.internal_code
 
+    @property
+    def display_name(self):
+        primary = self.primary_name or self.names.filter(is_primary=True).first() or self.names.first()
+        return primary.full_name if primary else "مريض بلا اسم"
+
+    @property
+    def calculated_age(self):
+        """العمر الحالي المشتق من الميلاد، أو العمر التقريبي مع وحدته."""
+        if self.date_of_birth:
+            today = timezone.localdate()
+            years = today.year - self.date_of_birth.year - (
+                (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day)
+            )
+            return f"{max(0, years)} سنة"
+        if self.approx_age_value is not None:
+            labels = {"year": "سنة", "month": "شهر", "day": "يوم"}
+            return f"{self.approx_age_value} {labels.get(self.approx_age_unit, '')}".strip()
+        return "غير محدد"
+
 
 class PatientName(SoftDeleteModel):
     """أسماء المريض (قد يكون له أكثر من صيغة اسم)."""
 
     patient = models.ForeignKey(Patient, verbose_name="المريض", on_delete=models.CASCADE, related_name="names")
-    full_name = models.CharField("الاسم الكامل", max_length=255)
+    full_name = models.CharField("الاسم الكامل", max_length=255, db_index=True)
     is_primary = models.BooleanField("أساسي", default=False)
     source = models.CharField("المصدر", max_length=80, blank=True, default="")
 
@@ -89,7 +109,7 @@ class PatientContact(SoftDeleteModel):
 
     patient = models.ForeignKey(Patient, verbose_name="المريض", on_delete=models.CASCADE, related_name="contacts")
     contact_type = models.CharField("النوع", max_length=20, choices=CONTACT_TYPE_CHOICES, default="mobile")
-    value = models.CharField("القيمة", max_length=120)
+    value = models.CharField("القيمة", max_length=120, db_index=True)
     is_primary = models.BooleanField("أساسي", default=False)
     notes = models.CharField("ملاحظات", max_length=255, blank=True, default="")
 
