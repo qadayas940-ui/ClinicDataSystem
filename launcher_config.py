@@ -13,6 +13,7 @@ from pathlib import Path
 # جذر المشروع
 BASE_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 
+
 def _config_home():
     if platform.system() == "Windows":
         root = os.environ.get("LOCALAPPDATA") or str(Path.home())
@@ -24,6 +25,15 @@ CONFIG_HOME = _config_home()
 CONFIG_FILE = CONFIG_HOME / "desktop.json"
 
 
+def _decode_codepoints(value):
+    if not value:
+        return None
+    try:
+        return "".join(chr(int(part)) for part in value.split(",") if part)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _load_desktop_config():
     try:
         return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
@@ -32,7 +42,10 @@ def _load_desktop_config():
 
 
 DESKTOP_CONFIG = _load_desktop_config()
-DATA_PATH = os.environ.get("CLINIC_DATA_PATH") or DESKTOP_CONFIG.get("data_path") or str(CONFIG_HOME / "data")
+CONFIGURED_DATA_PATH = DESKTOP_CONFIG.get("data_path") or _decode_codepoints(
+    DESKTOP_CONFIG.get("data_path_codepoints")
+)
+DATA_PATH = os.environ.get("CLINIC_DATA_PATH") or CONFIGURED_DATA_PATH or str(CONFIG_HOME / "data")
 
 # إعدادات الخادم المحلي
 ALLOW_LAN = os.environ.get("CLINIC_ALLOW_LAN", str(DESKTOP_CONFIG.get("allow_lan", False))).lower() in {"1", "true", "yes"}
