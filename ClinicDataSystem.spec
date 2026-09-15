@@ -4,8 +4,9 @@ import os
 from PyInstaller.utils.hooks import collect_dynamic_libs, collect_submodules
 
 # The Django PyInstaller hook imports the configured settings while analysing
-# the bundle. Point it at test settings for build-time discovery only;
-# launcher.py selects production settings when the installed app starts.
+# the bundle.  Point it at the non-production test settings for build-time
+# discovery only; launcher.py selects the hardened production settings when
+# the installed application starts.
 os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings.testing"
 
 hidden = (
@@ -24,19 +25,23 @@ hidden = (
 
 binaries = collect_dynamic_libs("_argon2_cffi_bindings")
 
-a = Analysis(
+a = Analysis(  # noqa: F821 - symbols are injected by PyInstaller
     ["launcher.py"],
     pathex=["."],
     binaries=binaries,
-    datas=[("templates", "templates"), ("static", "static")],
+    datas=[
+        ("templates", "templates"),
+        ("static", "static"),
+        ("apps/core/excel_reference_catalog.json", "apps/core"),
+    ],
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],
     excludes=["tkinter.test", "pytest"],
     noarchive=False,
 )
-pyz = PYZ(a.pure)
-exe = EXE(
+pyz = PYZ(a.pure)  # noqa: F821 - injected by PyInstaller
+exe = EXE(  # noqa: F821 - injected by PyInstaller
     pyz,
     a.scripts,
     [],
@@ -48,4 +53,4 @@ exe = EXE(
     upx=True,
     console=False,
 )
-coll = COLLECT(a.binaries, a.datas, exe, name="ClinicDataSystem")
+coll = COLLECT(a.binaries, a.datas, exe, name="ClinicDataSystem")  # noqa: F821 - injected by PyInstaller

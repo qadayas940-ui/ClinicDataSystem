@@ -7,6 +7,7 @@ from .models import (
     BackupHistory,
     Department,
     LicenseState,
+    ReferenceValue,
     ServerSettings,
     UpdateHistory,
 )
@@ -16,6 +17,13 @@ from .models import (
 class DepartmentAdmin(admin.ModelAdmin):
     list_display = ("name", "code", "is_active")
     search_fields = ("name", "code")
+
+
+@admin.register(ReferenceValue)
+class ReferenceValueAdmin(admin.ModelAdmin):
+    list_display = ("canonical_name", "category", "occurrence_count", "needs_review", "is_active")
+    list_filter = ("category", "needs_review", "is_active")
+    search_fields = ("canonical_name", "normalized_name")
 
 
 @admin.register(AuditLog)

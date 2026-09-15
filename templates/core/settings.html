@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}الإعدادات{% endblock %}
+{% block content %}
+<section class="page-head"><div><h1>الإعدادات</h1><p>إدارة النظام والعيادة من مكان واحد.</p></div></section>
+<div class="settings-grid">
+  <a class="settings-card" href="{% url 'accounts:change_password' %}"><b>الحساب والأمان</b><span>كلمة المرور وإعدادات الحساب</span></a>
+  <a class="settings-card" href="{% url 'accounts:user_list' %}"><b>الموظفون والأدوار</b><span>الحسابات والصلاحيات والأقسام</span></a>
+  <a class="settings-card" href="{% url 'core:departments' %}"><b>الأقسام والأطباء</b><span>إدارة أقسام العيادة والكوادر</span></a>
+  <a class="settings-card" href="{% url 'core:reference_list' %}"><b>قوائم الاستيراد</b><span>الأطباء والفحوصات والإحالات والمناطق</span></a>
+  <a class="settings-card" href="{% url 'core:server_settings' %}"><b>أجهزة الشبكة</b><span>الوصول المحلي والرابط والمنفذ</span></a>
+  <a class="settings-card" href="{% url 'backup:list' %}"><b>النسخ والتصدير</b><span>النسخ الاحتياطية وملفات Excel</span></a>
+  <a class="settings-card" href="{% url 'updater:list' %}"><b>التحديثات</b><span>إصدار البرنامج والتحديثات المتاحة</span></a>
+</div>
+{% endblock %}

@@ -49,19 +49,25 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    var saved = localStorage.getItem("clinic-theme");
-    var toggle = document.querySelector("[data-theme-toggle]");
-    if (saved === "dark") document.documentElement.dataset.theme = "dark";
-    if (toggle) toggle.addEventListener("click", function () {
-      var dark = document.documentElement.dataset.theme !== "dark";
-      document.documentElement.dataset.theme = dark ? "dark" : "";
-      localStorage.setItem("clinic-theme", dark ? "dark" : "light");
-    });
+    document.documentElement.removeAttribute("data-theme");
+    localStorage.removeItem("clinic-theme");
     document.querySelectorAll("[data-birthdate]").forEach(function (input) {
       var hint = document.createElement("small");
       hint.className = "help-text calculated-age";
       input.insertAdjacentElement("afterend", hint);
-      function update() { hint.textContent = ageText(input.value); }
+      var ageField = document.querySelector('[data-field="approx_age_value"]');
+      var unitField = document.querySelector('[data-field="approx_age_unit"]');
+      function update() {
+        hint.textContent = ageText(input.value);
+        [ageField, unitField].forEach(function (field) {
+          if (!field) return;
+          field.hidden = Boolean(input.value);
+          if (input.value) {
+            var control = field.querySelector("input, select");
+            if (control) control.value = "";
+          }
+        });
+      }
       input.addEventListener("input", update);
       input.addEventListener("change", update);
       update();

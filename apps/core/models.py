@@ -96,6 +96,43 @@ class Department(SoftDeleteModel):
         return self.name
 
 
+class ReferenceValue(SoftDeleteModel):
+    """قيمة مرجعية مستخرجة من الملفات القديمة لاستخدامها في القوائم والبحث."""
+
+    CATEGORY_CHOICES = [
+        ("department", "قسم"),
+        ("doctor", "طبيب"),
+        ("organizer", "منظّم"),
+        ("lab_test", "فحص مختبري"),
+        ("referral_destination", "جهة إحالة"),
+        ("diagnosis", "تشخيص / حالة"),
+        ("area", "منطقة سكن"),
+    ]
+
+    category = models.CharField("التصنيف", max_length=40, choices=CATEGORY_CHOICES, db_index=True)
+    canonical_name = models.CharField("الاسم الموحّد", max_length=255)
+    normalized_name = models.CharField("مفتاح المطابقة", max_length=255, db_index=True)
+    aliases = models.JSONField("الصيغ الأصلية", default=list, blank=True)
+    source_sheets = models.JSONField("أوراق المصدر", default=list, blank=True)
+    occurrence_count = models.PositiveIntegerField("عدد مرات الظهور", default=0)
+    needs_review = models.BooleanField("يحتاج مراجعة", default=False)
+    is_active = models.BooleanField("نشط", default=True)
+
+    class Meta:
+        verbose_name = "قيمة مرجعية"
+        verbose_name_plural = "القيم المرجعية"
+        ordering = ["category", "canonical_name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["category", "normalized_name"],
+                name="uniq_reference_category_normalized",
+            ),
+        ]
+
+    def __str__(self):
+        return self.canonical_name
+
+
 class AuditLog(models.Model):
     """سجل تدقيق للعمليات المهمة — بدون بيانات حساسة."""
 

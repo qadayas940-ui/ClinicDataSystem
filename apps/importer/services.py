@@ -2,6 +2,7 @@ import hashlib
 import json
 import re
 import shutil
+from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
 
@@ -61,6 +62,73 @@ def _text(value):
 def normalize_arabic(value):
     value = _text(value).lower()
     return value.translate(str.maketrans({"أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي", "ة": "ه", "ؤ": "و", "ئ": "ي"}))
+
+
+REFERENCE_FIELDS = {
+    "department": "department",
+    "doctor": "doctor",
+    "organizer": "organizer",
+    "test": "lab_test",
+    "status": "diagnosis",
+    "address": "area",
+}
+
+
+def _reference_identity(category, value):
+    """يوحّد الفروق الشكلية المؤكدة فقط، ويترك التشابه الغامض للمراجعة."""
+    display = _text(value)
+    if category == "doctor":
+        display = re.sub(r"^(?:د\s*[./-]?|دكتور(?:ة)?)\s*", "", display, flags=re.IGNORECASE).strip()
+        display = f"د. {display}" if display else ""
+    elif category == "lab_test":
+        display = display.upper()
+    normalized = normalize_arabic(display)
+    normalized = re.sub(r"[\s._/\\-]+", " ", normalized).strip()
+    return display, normalized
+
+
+def _remember_reference(index, category, value, sheet_name):
+    display, normalized = _reference_identity(category, value)
+    if not display or not normalized:
+        return
+    item = index[(category, normalized)]
+    item["canonical_name"] = item.get("canonical_name") or display
+    item["aliases"].add(_text(value))
+    item["source_sheets"].add(sheet_name)
+    item["occurrence_count"] += 1
+
+
+def _sync_reference_values(index):
+    from apps.core.models import Department, ReferenceValue
+
+    for (category, normalized), data in index.items():
+        aliases = sorted(data["aliases"])
+        needs_review = len(aliases) > 1 or len(normalized) < 3
+        item, created = ReferenceValue.all_objects.get_or_create(
+            category=category,
+            normalized_name=normalized,
+            defaults={
+                "canonical_name": data["canonical_name"],
+                "aliases": aliases,
+                "source_sheets": sorted(data["source_sheets"]),
+                "occurrence_count": data["occurrence_count"],
+                "needs_review": needs_review,
+            },
+        )
+        if not created:
+            item.canonical_name = data["canonical_name"]
+            item.aliases = sorted(set(item.aliases) | set(aliases))
+            item.source_sheets = sorted(set(item.source_sheets) | data["source_sheets"])
+            item.occurrence_count += data["occurrence_count"]
+            item.needs_review = item.needs_review or needs_review
+            item.deleted_at = None
+            item.save(update_fields=["canonical_name", "aliases", "source_sheets", "occurrence_count", "needs_review", "deleted_at", "updated_at"])
+        if category == "department":
+            code = "XLS-" + hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:8].upper()
+            Department.all_objects.get_or_create(
+                code=code,
+                defaults={"name": data["canonical_name"], "department_type": "clinic"},
+            )
 
 
 def _canonical_header(value):
@@ -175,6 +243,7 @@ def analyze_workbook(file_path, digest, original_filename, user):
             )
         }
     current_hashes, name_index = set(), {}
+    reference_index = defaultdict(lambda: {"aliases": set(), "source_sheets": set(), "occurrence_count": 0})
     total = valid = flagged = 0
     try:
         for sheet_index, ws in enumerate(workbook.worksheets):
@@ -207,6 +276,12 @@ def analyze_workbook(file_path, digest, original_filename, user):
                 meaningful = [key for key in canonical if key != "sequence" and _text(canonical[key])]
                 if not meaningful:
                     continue
+                for field_name, value in canonical.items():
+                    category = REFERENCE_FIELDS.get(field_name)
+                    if normalize_arabic(ws.title) in {"احالات", "الاحالات"} and field_name == "doctor":
+                        category = "referral_destination"
+                    if category:
+                        _remember_reference(reference_index, category, value, ws.title)
                 normalized_name = normalize_arabic(canonical.get("name"))
                 payload = json.dumps(raw, ensure_ascii=False, sort_keys=True, default=str)
                 row_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -236,6 +311,7 @@ def analyze_workbook(file_path, digest, original_filename, user):
                 else: flagged += 1
             sheet.actual_data_rows = row_count
             sheet.save(update_fields=["actual_data_rows"])
+        _sync_reference_values(reference_index)
         batch.total_rows, batch.valid_rows, batch.issue_rows = total, valid, flagged
         batch.status, batch.completed_at = "reviewing", timezone.now()
         batch.save(update_fields=["total_rows", "valid_rows", "issue_rows", "status", "completed_at"])

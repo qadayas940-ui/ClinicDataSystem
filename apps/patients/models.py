@@ -81,6 +81,20 @@ class Patient(SoftDeleteModel):
         return "غير محدد"
 
 
+class PatientSequence(models.Model):
+    """عداد سنوي آمن للرقم التعريفي الدائم للمريض."""
+
+    year = models.PositiveSmallIntegerField("السنة", unique=True)
+    last_value = models.PositiveBigIntegerField("آخر تسلسل", default=0)
+
+    class Meta:
+        verbose_name = "تسلسل أرقام المرضى"
+        verbose_name_plural = "تسلسلات أرقام المرضى"
+
+    def __str__(self):
+        return f"{self.year}: {self.last_value}"
+
+
 class PatientName(SoftDeleteModel):
     """أسماء المريض (قد يكون له أكثر من صيغة اسم)."""
 

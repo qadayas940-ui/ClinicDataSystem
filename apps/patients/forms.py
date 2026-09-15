@@ -56,12 +56,22 @@ class PatientForm(forms.Form):
         required=True,
         help_text="يقبل 07899189225 أو +9647899189225 ويحفظه موحداً بصيغة +964.",
     )
-    address = forms.CharField(label="منطقة السكن / العنوان", max_length=500, required=False)
+    address = forms.CharField(label="منطقة السكن / العنوان", max_length=500, required=True)
 
     def clean_full_name(self):
         value = re.sub(r"\s+", " ", self.cleaned_data["full_name"]).strip()
         parts = value.split(" ")
-        if len(parts) < 4:
+        units = []
+        index = 0
+        compound_starts = {"عبد", "ابو", "أبو", "ام", "أم"}
+        while index < len(parts):
+            if parts[index] in compound_starts and index + 1 < len(parts):
+                units.append(parts[index] + " " + parts[index + 1])
+                index += 2
+            else:
+                units.append(parts[index])
+                index += 1
+        if len(units) < 4:
             raise forms.ValidationError("الاسم يجب أن يكون رباعياً على الأقل. الاسم الثنائي أو الثلاثي يحتاج إكمال.")
         if re.search(r"[0-9٠-٩]", value):
             raise forms.ValidationError("الاسم لا يجب أن يحتوي أرقاماً.")
@@ -78,6 +88,8 @@ class PatientForm(forms.Form):
             self.add_error("date_of_birth", "تاريخ الميلاد لا يمكن أن يكون في المستقبل.")
         if data.get("date_of_birth") and data.get("approx_age_value") is not None:
             raise ValidationError("اختر تاريخ الميلاد أو العمر التقريبي، وليس الاثنين معاً.")
+        if not data.get("date_of_birth") and data.get("approx_age_value") is None:
+            raise ValidationError("أدخل تاريخ الميلاد، أو أدخل العمر التقريبي إذا كان التاريخ غير معروف.")
         if data.get("approx_age_value") is not None and not data.get("approx_age_unit"):
             self.add_error("approx_age_unit", "اختر وحدة العمر التقريبي.")
         return data

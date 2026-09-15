@@ -55,20 +55,30 @@
   margin-top: 5px;
 }
 
-.dashboard-hero { align-items: stretch; }
-.dashboard-actions { align-items: center; display: flex; gap: 10px; min-width: min(100%, 620px); }
-.hero-search { box-shadow: none; flex: 1; margin: 0; }
-.hero-search .btn-primary { background: var(--blue); color: #fff; }
-.theme-toggle { background: #fff; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); cursor: pointer; font-size: 1.15rem; padding: 6px 9px; }
 .account-link { color: var(--ink); font-weight: 650; }
 .upload-box.is-dragging { background: #dcefff; border-color: var(--blue); transform: scale(1.01); }
 .analysis-progress { background: #f5fbff; border: 1px solid #cfe7f6; border-radius: 10px; margin-top: 6px; padding: 14px; }
 .progress-label { color: #235676; display: flex; justify-content: space-between; margin-bottom: 8px; }
 .progress-track { background: #d8e8f2; border-radius: 999px; height: 12px; overflow: hidden; }
 .progress-track i { background: linear-gradient(90deg, #2478b5, #42b7a4); border-radius: inherit; display: block; height: 100%; transition: width .35s ease; width: 1%; }
-@media (max-width: 900px) { .dashboard-actions { flex-wrap: wrap; width: 100%; } .hero-search { min-width: 100%; } }
-html[data-theme="dark"] { --bg: #111a22; --white: #18242e; --ink: #edf5f8; --muted: #a8bac5; --line: #314653; --sky: #183447; --green: #153e30; --yellow: #493d16; --red: #4c2024; --light-blue: #183451; --navy: #0f2638; }
-html[data-theme="dark"] .form-control, html[data-theme="dark"] .field input, html[data-theme="dark"] .field select, html[data-theme="dark"] .field textarea, html[data-theme="dark"] .upload-box input[type="file"], html[data-theme="dark"] .btn-secondary, html[data-theme="dark"] .theme-toggle { background: #18242e; border-color: var(--line); color: var(--ink); }
-html[data-theme="dark"] .upload-box { background: #132b3a; }
-html[data-theme="dark"] .quick-links a { background: #13202a; }
-html[data-theme="dark"] th { background: #14212b; color: var(--muted); }
+.welcome-panel { align-items: center; background: #f7fbff; border: 1px solid #d8e8f2; border-radius: 8px; display: grid; gap: 24px; grid-template-columns: minmax(260px, .8fr) minmax(480px, 1.2fr); margin-bottom: 24px; padding: 24px 30px; }
+.welcome-panel h1 { color: #153b5b; font-size: 1.65rem; margin: 4px 0; }
+.welcome-panel p { color: var(--muted); margin: 0; }
+.welcome-actions { align-items: center; display: flex; gap: 10px; justify-content: center; }
+.dashboard-search { border-radius: 8px; box-shadow: none; margin: 0; max-width: 520px; min-width: 360px; padding: 5px; width: 100%; }
+.compact-action { flex: 0 0 auto; min-height: 46px; white-space: nowrap; }
+.module-grid-three { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-inline: auto; max-width: 980px; }
+.module-grid-three .module-card { min-height: 118px; text-align: center; }
+.module-card:hover { background: #f8fbfd; color: var(--ink); transform: none; }
+.system-strip { margin-top: 24px; }
+.system-strip > div { display: grid; gap: 12px; grid-template-columns: repeat(3, 1fr); }
+.system-strip span { border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
+.system-strip span:last-child { border-left: 0; }
+.settings-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.settings-card { background: #fff; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); display: flex; flex-direction: column; gap: 8px; min-height: 110px; padding: 22px; }
+.settings-card:hover { border-color: #78add0; background: #f8fbfd; }
+.settings-card span { color: var(--muted); }
+.filter-toolbar { align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 10px; grid-template-columns: 1fr 240px auto auto; margin-bottom: 16px; padding: 12px; }
+[hidden] { display: none !important; }
+@media (max-width: 900px) { .welcome-panel { grid-template-columns: 1fr; } .welcome-actions { flex-wrap: wrap; } .dashboard-search { min-width: 100%; } .settings-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 650px) { .module-grid-three, .settings-grid, .system-strip > div, .filter-toolbar { grid-template-columns: 1fr; } }

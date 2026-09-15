@@ -5,7 +5,10 @@
 - إصدار البرنامج الحالي
 - حالة الترخيص التجريبي
 """
+import hashlib
+import json
 from datetime import timedelta
+from pathlib import Path
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -20,6 +23,7 @@ class Command(BaseCommand):
         self._create_app_version()
         self._create_license()
         self._create_server_settings()
+        self._create_reference_catalog()
         self.stdout.write(self.style.SUCCESS("✅ تمت تهيئة البيانات الأولية بنجاح."))
 
     def _create_roles(self):
@@ -40,13 +44,13 @@ class Command(BaseCommand):
         depts = [
             {"code": "GENERAL", "name": "العيادة العامة", "department_type": "clinic"},
             {"code": "LAB",     "name": "المختبر", "department_type": "laboratory"},
-            {"code": "EYE",     "name": "عيادة العيون", "department_type": "clinic"},
             {"code": "REF",     "name": "الإحالات", "department_type": "administration"},
         ]
         for dd in depts:
             _, created = Department.objects.get_or_create(code=dd["code"], defaults=dd)
             if created:
                 self.stdout.write(f"  + قسم: {dd['name']}")
+        Department.all_objects.filter(code="EYE").update(is_active=False, deleted_at=timezone.now())
 
     def _create_app_version(self):
         from apps.core.models import AppVersion
@@ -80,3 +84,32 @@ class Command(BaseCommand):
     def _create_server_settings(self):
         from apps.core.models import ServerSettings
         ServerSettings.objects.get_or_create(pk=1, defaults={"port": 8765, "allow_network_access": False, "bind_address": "127.0.0.1"})
+
+    def _create_reference_catalog(self):
+        from apps.core.models import Department, ReferenceValue
+
+        catalog_path = Path(__file__).resolve().parents[2] / "excel_reference_catalog.json"
+        if not catalog_path.exists():
+            self.stdout.write(self.style.WARNING("لم يُعثر على قاموس Excel المضمّن."))
+            return
+        entries = json.loads(catalog_path.read_text(encoding="utf-8"))
+        for entry in entries:
+            item, _ = ReferenceValue.all_objects.update_or_create(
+                category=entry["category"],
+                normalized_name=entry["normalized_name"],
+                defaults={
+                    "canonical_name": entry["canonical_name"],
+                    "aliases": entry["aliases"],
+                    "source_sheets": entry["source_sheets"],
+                    "occurrence_count": entry["occurrence_count"],
+                    "needs_review": entry["needs_review"],
+                    "deleted_at": None,
+                },
+            )
+            if entry["category"] == "department":
+                code = "XLS-" + hashlib.sha1(entry["normalized_name"].encode("utf-8")).hexdigest()[:8].upper()
+                Department.all_objects.update_or_create(
+                    code=code,
+                    defaults={"name": item.canonical_name, "department_type": "clinic", "is_active": True, "deleted_at": None},
+                )
+        self.stdout.write(f"  + القيم المرجعية المستخرجة من Excel: {len(entries)}")

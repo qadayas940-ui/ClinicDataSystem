@@ -2,19 +2,21 @@
 import json
 import logging
 import os
+import re
 import socket
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db import connection
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .forms import DepartmentForm, ServerSettingsForm
-from .models import BackupHistory, Department, LicenseState, ServerSettings
+from .forms import DepartmentForm, ReferenceValueForm, ServerSettingsForm
+from .models import BackupHistory, Department, LicenseState, ReferenceValue, ServerSettings
 from .utils import log_audit, owner_required
 
 logger = logging.getLogger("clinic")
@@ -116,6 +118,50 @@ def dashboard(request):
 @owner_required
 def department_list(request):
     return render(request, "core/departments.html", {"departments": Department.objects.all()})
+
+
+@owner_required
+def settings_home(request):
+    reference_counts = {
+        key: ReferenceValue.objects.filter(category=key, is_active=True).count()
+        for key, _ in ReferenceValue.CATEGORY_CHOICES
+    }
+    return render(request, "core/settings.html", {"reference_counts": reference_counts})
+
+
+@owner_required
+def reference_list(request):
+    category = request.GET.get("category", "")
+    query = request.GET.get("q", "").strip()
+    items = ReferenceValue.objects.all()
+    if category:
+        items = items.filter(category=category)
+    if query:
+        items = items.filter(canonical_name__icontains=query)
+    page = Paginator(items, 100).get_page(request.GET.get("page"))
+    return render(request, "core/reference_list.html", {
+        "page": page,
+        "category": category,
+        "query": query,
+        "categories": ReferenceValue.CATEGORY_CHOICES,
+    })
+
+
+@owner_required
+def reference_form(request, pk=None):
+    item = get_object_or_404(ReferenceValue, pk=pk) if pk else None
+    form = ReferenceValueForm(request.POST or None, instance=item)
+    if request.method == "POST" and form.is_valid():
+        item = form.save(commit=False)
+        item.normalized_name = re.sub(r"\s+", " ", item.canonical_name.strip().lower())
+        item.save()
+        messages.success(request, "تم حفظ القيمة المرجعية.")
+        return redirect("core:reference_list")
+    return render(request, "shared/form.html", {
+        "form": form,
+        "title": "تعديل قيمة مرجعية" if pk else "إضافة قيمة مرجعية",
+        "submit_label": "حفظ",
+    })
 
 
 @owner_required

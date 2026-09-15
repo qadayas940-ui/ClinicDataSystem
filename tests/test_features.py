@@ -10,7 +10,7 @@ from django.utils import timezone
 from openpyxl import Workbook
 
 from apps.accounts.models import Role
-from apps.core.models import LicenseState
+from apps.core.models import LicenseState, ReferenceValue
 from apps.importer.services import analyze_workbook
 from apps.patients.models import Patient
 from apps.patients.services import create_patient
@@ -25,7 +25,7 @@ class PatientWorkflowTests(TestCase):
 
     def test_patient_gets_permanent_code_and_derived_age(self):
         patient = create_patient({"full_name": "اختبار مريض كامل علي", "gender": "male", "date_of_birth": timezone.localdate().replace(year=timezone.localdate().year - 20), "approx_age_value": None, "approx_age_unit": "", "phone": "0770 123 4567", "address": "الموصل"}, self.user)
-        self.assertTrue(patient.internal_code.startswith("CLN-"))
+        self.assertRegex(patient.internal_code, rf"^CLN{str(timezone.localdate().year)[-2:]}-\d{{10}}$")
         self.assertEqual(patient.display_name, "اختبار مريض كامل علي")
         self.assertIn("20", patient.calculated_age)
         self.assertEqual(patient.contacts.first().value, "+9647701234567")
@@ -73,3 +73,6 @@ class ImportAnalysisTests(TestCase):
         self.assertEqual(batch.total_rows, 5)
         self.assertEqual(list(batch.sheets.values_list("actual_data_rows", flat=True)), [2, 1, 1, 1])
         self.assertEqual(batch.rows.filter(classification="repeat_visit").count(), 1)
+        self.assertTrue(ReferenceValue.objects.filter(category="department", canonical_name="عام").exists())
+        self.assertTrue(ReferenceValue.objects.filter(category="lab_test", canonical_name="CBC").exists())
+        self.assertTrue(ReferenceValue.objects.filter(category="referral_destination").exists())

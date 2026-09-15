@@ -1,11 +1,10 @@
 import re
-import uuid
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from .models import Patient, PatientAddress, PatientContact, PatientName
+from .models import Patient, PatientAddress, PatientContact, PatientName, PatientSequence
 
 
 def normalize_phone(value):
@@ -26,7 +25,11 @@ def normalize_phone(value):
 
 
 def _new_code():
-    return f"CLN-{uuid.uuid4().hex[:10].upper()}"
+    year = timezone.localdate().year
+    sequence, _ = PatientSequence.objects.select_for_update().get_or_create(year=year)
+    sequence.last_value += 1
+    sequence.save(update_fields=["last_value"])
+    return f"CLN{str(year)[-2:]}-{sequence.last_value:010d}"
 
 
 @transaction.atomic
