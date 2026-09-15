@@ -1,0 +1,39 @@
+# بيانات التطبيق (لا تُرفع أبداً)
+data/
+*.db
+*.sqlite3
+
+# البيئة
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Django
+staticfiles/
+media/
+*.log
+
+# أدوات التطوير
+.coverage
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+
+# أنظمة التشغيل والمحررات
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

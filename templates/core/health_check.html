@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load clinic_tags %}
+{% block title %}فحص الصحة — {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4"><i class="bi bi-heart-pulse"></i> فحص صحة النظام</h1>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header clinic-card-header d-flex justify-content-between align-items-center">
+        <span>الحالة العامة</span>
+        <span class="badge bg-{% status_badge health.status %}">
+            {% if health.status == 'ok' %}سليم{% else %}يوجد خلل{% endif %}
+        </span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-striped mb-0">
+            <tbody>
+                <tr><th class="w-50">إصدار النظام</th><td>{{ health.version }}</td></tr>
+                <tr><th>حالة قاعدة البيانات</th>
+                    <td><span class="badge bg-{% status_badge health.db_status %}">
+                        {% if health.db_status == 'connected' %}متصلة{% else %}غير متصلة{% endif %}
+                    </span></td></tr>
+                <tr><th>حجم قاعدة البيانات</th><td>{{ health.db_size_mb }} م.ب</td></tr>
+                <tr><th>أيام التجربة المتبقية</th><td>{{ health.trial_days_remaining }} يوم</td></tr>
+                <tr><th>عدد المستخدمين</th><td>{{ health.users_count }}</td></tr>
+                <tr><th>وقت الخادم</th><td dir="ltr">{{ health.server_time }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="d-flex gap-2">
+    <a href="{% url 'core:health_api' %}" class="btn btn-outline-secondary" target="_blank">
+        <i class="bi bi-code-slash"></i> عرض JSON
+    </a>
+    <a href="{% url 'core:dashboard' %}" class="btn btn-primary">
+        <i class="bi bi-house-door"></i> الرئيسية
+    </a>
+</div>
+{% endblock %}

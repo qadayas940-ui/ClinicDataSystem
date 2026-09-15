@@ -1,0 +1,15 @@
+# ضمان أسطر LF للملفات النصية
+* text=auto eol=lf
+
+*.py   text eol=lf
+*.html text eol=lf
+*.css  text eol=lf
+*.js   text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+
+# ملفات ثنائية
+*.png  binary
+*.jpg  binary
+*.svg  text eol=lf
+*.db   binary
