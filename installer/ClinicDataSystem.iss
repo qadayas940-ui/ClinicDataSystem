@@ -65,7 +65,8 @@ begin
     ConfigDir := ExpandConstant('{localappdata}\ClinicDataSystem');
     ForceDirectories(ConfigDir);
     JsonPath := ConfigDir + '\desktop.json';
-    SafePath := StringChangeEx(DataPage.Values[0], '\', '/', True);
+    SafePath := DataPage.Values[0];
+    StringChangeEx(SafePath, '\', '/', True);
     SaveStringToFile(JsonPath, '{"data_path":"' + SafePath + '","allow_lan":false,"port":8765}', False);
   end;
 end;
