@@ -15,6 +15,8 @@ import shutil
 import sys
 import threading
 import time
+import traceback
+import webbrowser
 from datetime import datetime
 from datetime import timezone as datetime_timezone
 from pathlib import Path
@@ -23,8 +25,44 @@ from urllib.request import urlopen
 import launcher_config as cfg
 
 
+def _startup_log_path():
+    try:
+        log_dir = Path(cfg.DATA_PATH).expanduser().resolve() / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        return log_dir / "startup.log"
+    except OSError:
+        fallback = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ClinicDataSystem"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback / "startup.log"
+
+
+def _write_startup_log(message):
+    path = _startup_log_path()
+    stamp = datetime.now(datetime_timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"\n[{stamp}] {message}\n")
+    return path
+
+
+def _show_error_dialog(message, log_path):
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(
+            0,
+            f"{message}\n\nتم حفظ التفاصيل في:\n{log_path}",
+            "ClinicDataSystem - خطأ في التشغيل",
+            0x10,
+        )
+    except Exception:
+        return
+
+
 def _setup_environment():
     """ضبط متغيرات البيئة قبل تحميل Django."""
+    _write_startup_log(f"Starting ClinicDataSystem. base={cfg.BASE_DIR}, data={cfg.DATA_PATH}, url={cfg.APP_URL}")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.production")
     data_path = Path(cfg.DATA_PATH).expanduser().resolve()
     for child in ("database", "uploads", "license", "logs", "backups"):
@@ -67,18 +105,22 @@ def _run_migrations():
 
 def _start_server(holder):
     """تشغيل خادم Waitress."""
-    from waitress.server import create_server
+    try:
+        from waitress.server import create_server
 
-    from config.wsgi import application
+        from config.wsgi import application
 
-    server = create_server(
-        application,
-        host=cfg.HOST,
-        port=cfg.PORT,
-        threads=cfg.THREADS,
-    )
-    holder["server"] = server
-    server.run()
+        server = create_server(
+            application,
+            host=cfg.HOST,
+            port=cfg.PORT,
+            threads=cfg.THREADS,
+        )
+        holder["server"] = server
+        server.run()
+    except Exception as exc:  # noqa: BLE001
+        holder["error"] = exc
+        holder["traceback"] = traceback.format_exc()
 
 
 def _wait_for_server(timeout=30):
@@ -108,6 +150,8 @@ def main():
         server_thread.start()
 
         if not _wait_for_server():
+            if server_holder.get("error"):
+                raise RuntimeError(f"تعذّر تشغيل الخادم: {server_holder['error']}\n{server_holder.get('traceback', '')}")
             print("خطأ: تعذّر تشغيل الخادم في الوقت المحدد.")
             sys.exit(1)
 
@@ -127,17 +171,24 @@ def main():
             server = server_holder.get("server")
             if server:
                 server.close()
-        except ImportError:
-            # في حال عدم توفّر pywebview، أبقِ الخادم يعمل وأخبر المستخدم
-            print(
-                "تعذّر تحميل واجهة سطح المكتب (pywebview غير مثبّت). "
-                f"افتح المتصفح على العنوان: {cfg.APP_URL}"
+        except Exception as exc:  # noqa: BLE001
+            message = (
+                "تعذّر فتح نافذة سطح المكتب. "
+                f"سيتم فتح النظام في المتصفح على العنوان: {cfg.APP_URL}. "
+                f"تفاصيل الخطأ: {exc}"
             )
+            log_path = _write_startup_log(message + "\n" + traceback.format_exc())
+            print(message)
+            _show_error_dialog(message, log_path)
+            webbrowser.open(cfg.APP_URL)
             server_thread.join()
 
     except Exception as exc:  # noqa: BLE001
+        details = traceback.format_exc()
+        log_path = _write_startup_log(f"حدث خطأ أثناء تشغيل التطبيق: {exc}\n{details}")
         print("حدث خطأ أثناء تشغيل التطبيق:")
         print(str(exc))
+        _show_error_dialog(f"تعذر تشغيل ClinicDataSystem.\n\nالخطأ: {exc}", log_path)
         sys.exit(1)
 
 
