@@ -24,14 +24,14 @@ class PatientWorkflowTests(TestCase):
         self.user = User.objects.create_user(username="org", password="StrongPass123", role=self.role)
 
     def test_patient_gets_permanent_code_and_derived_age(self):
-        patient = create_patient({"full_name": "اختبار مريض كامل", "gender": "male", "date_of_birth": timezone.localdate().replace(year=timezone.localdate().year - 20), "approx_age_value": None, "approx_age_unit": "", "phone": "0770 123 4567", "address": "الموصل"}, self.user)
+        patient = create_patient({"full_name": "اختبار مريض كامل علي", "gender": "male", "date_of_birth": timezone.localdate().replace(year=timezone.localdate().year - 20), "approx_age_value": None, "approx_age_unit": "", "phone": "0770 123 4567", "address": "الموصل"}, self.user)
         self.assertTrue(patient.internal_code.startswith("CLN-"))
-        self.assertEqual(patient.display_name, "اختبار مريض كامل")
+        self.assertEqual(patient.display_name, "اختبار مريض كامل علي")
         self.assertIn("20", patient.calculated_age)
-        self.assertEqual(patient.contacts.first().value, "07701234567")
+        self.assertEqual(patient.contacts.first().value, "+9647701234567")
 
     def test_search_by_name(self):
-        patient = create_patient({"full_name": "سارة أحمد محمود", "gender": "female", "date_of_birth": None, "approx_age_value": 8, "approx_age_unit": "year", "phone": "", "address": "الزهور"}, self.user)
+        patient = create_patient({"full_name": "سارة أحمد محمود علي", "gender": "female", "date_of_birth": None, "approx_age_value": 8, "approx_age_unit": "year", "phone": "07899189225", "address": "الزهور"}, self.user)
         self.client.force_login(self.user)
         response = self.client.get(reverse("patients:list"), {"q": "سارة"})
         self.assertContains(response, patient.internal_code)
