@@ -32,7 +32,17 @@ def _load_desktop_config():
 
 
 DESKTOP_CONFIG = _load_desktop_config()
-DATA_PATH = os.environ.get("CLINIC_DATA_PATH") or DESKTOP_CONFIG.get("data_path") or str(CONFIG_HOME / "data")
+
+
+def _default_data_path():
+    if platform.system() == "Windows":
+        d_drive_path = Path("D:/GOODJobe/mmmmm/Data")
+        if d_drive_path.parent.exists():
+            return str(d_drive_path)
+    return str(CONFIG_HOME / "data")
+
+
+DATA_PATH = os.environ.get("CLINIC_DATA_PATH") or DESKTOP_CONFIG.get("data_path") or _default_data_path()
 
 # إعدادات الخادم المحلي
 ALLOW_LAN = os.environ.get("CLINIC_ALLOW_LAN", str(DESKTOP_CONFIG.get("allow_lan", False))).lower() in {"1", "true", "yes"}
