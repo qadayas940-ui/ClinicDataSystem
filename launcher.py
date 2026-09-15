@@ -30,7 +30,7 @@ def _startup_log_path():
     try:
         cfg.CONFIG_HOME.mkdir(parents=True, exist_ok=True)
         return cfg.CONFIG_HOME / "startup.log"
-    except Exception:
+    except OSError:
         return Path.cwd() / "startup.log"
 
 
@@ -40,7 +40,7 @@ def _write_startup_log(message):
         stamp = datetime.now(datetime_timezone.utc).isoformat()
         with path.open("a", encoding="utf-8") as handle:
             handle.write(f"[{stamp}] {message}\n")
-    except Exception:
+    except OSError:
         pass
 
 
@@ -54,7 +54,7 @@ def _show_error_dialog(message):
                 "ClinicDataSystem - خطأ في التشغيل",
                 0x10,
             )
-    except Exception:
+    except (AttributeError, OSError):
         pass
 
 
