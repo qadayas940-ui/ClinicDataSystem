@@ -19,6 +19,7 @@ import traceback
 import webbrowser
 from datetime import datetime
 from datetime import timezone as datetime_timezone
+from io import StringIO
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -63,6 +64,10 @@ def _show_error_dialog(message, log_path):
 def _setup_environment():
     """ضبط متغيرات البيئة قبل تحميل Django."""
     _write_startup_log(f"Starting ClinicDataSystem. base={cfg.BASE_DIR}, data={cfg.DATA_PATH}, url={cfg.APP_URL}")
+    if sys.stdout is None:
+        sys.stdout = StringIO()
+    if sys.stderr is None:
+        sys.stderr = StringIO()
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.production")
     data_path = Path(cfg.DATA_PATH).expanduser().resolve()
     for child in ("database", "uploads", "license", "logs", "backups"):
@@ -90,9 +95,10 @@ def _run_migrations():
         destination.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(datetime_timezone.utc).strftime("%Y%m%d-%H%M%S")
         shutil.copy2(db_path, destination / f"clinic-before-update-{stamp}.db")
-    call_command("migrate", interactive=False, verbosity=1)
-    call_command("init_data", verbosity=0)
-    call_command("collectstatic", interactive=False, verbosity=0)
+    command_output = StringIO()
+    call_command("migrate", interactive=False, verbosity=1, stdout=command_output, stderr=command_output)
+    call_command("init_data", verbosity=0, stdout=command_output, stderr=command_output)
+    call_command("collectstatic", interactive=False, verbosity=0, stdout=command_output, stderr=command_output)
     from datetime import timedelta
 
     from django.utils import timezone
@@ -100,7 +106,10 @@ def _run_migrations():
     from apps.core.models import BackupHistory
 
     if not BackupHistory.objects.filter(status="success", created_at__gte=timezone.now() - timedelta(days=1)).exists():
-        call_command("create_backup", automatic=True, verbosity=0)
+        call_command("create_backup", automatic=True, verbosity=0, stdout=command_output, stderr=command_output)
+    output = command_output.getvalue().strip()
+    if output:
+        _write_startup_log(output)
 
 
 def _start_server(holder):
