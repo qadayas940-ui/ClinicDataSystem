@@ -9,12 +9,14 @@
 
 يعالج الأخطاء ويعرضها للمستخدم برسائل عربية مفهومة.
 """
+import ctypes
 import os
 import secrets
 import shutil
 import sys
 import threading
 import time
+import traceback
 from datetime import datetime
 from datetime import timezone as datetime_timezone
 from pathlib import Path
@@ -23,8 +25,42 @@ from urllib.request import urlopen
 import launcher_config as cfg
 
 
+def _startup_log_path():
+    """ملف تشخيص مبكر يعمل حتى قبل تهيئة Django."""
+    try:
+        cfg.CONFIG_HOME.mkdir(parents=True, exist_ok=True)
+        return cfg.CONFIG_HOME / "startup.log"
+    except Exception:
+        return Path.cwd() / "startup.log"
+
+
+def _write_startup_log(message):
+    try:
+        path = _startup_log_path()
+        stamp = datetime.now(datetime_timezone.utc).isoformat()
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{stamp}] {message}\n")
+    except Exception:
+        pass
+
+
+def _show_error_dialog(message):
+    """إظهار رسالة خطأ مرئية في نسخة Windows ذات windowed=True."""
+    try:
+        if sys.platform.startswith("win"):
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                message,
+                "ClinicDataSystem - خطأ في التشغيل",
+                0x10,
+            )
+    except Exception:
+        pass
+
+
 def _setup_environment():
     """ضبط متغيرات البيئة قبل تحميل Django."""
+    _write_startup_log(f"بدء تهيئة البيئة. DATA_PATH={cfg.DATA_PATH}")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.production")
     data_path = Path(cfg.DATA_PATH).expanduser().resolve()
     for child in ("database", "uploads", "license", "logs", "backups"):
@@ -36,10 +72,12 @@ def _setup_environment():
     os.environ.setdefault("SECRET_KEY", secret_file.read_text(encoding="utf-8").strip())
     os.environ.setdefault("ALLOWED_HOSTS", "127.0.0.1,localhost,*" if cfg.ALLOW_LAN else "127.0.0.1,localhost")
     sys.path.insert(0, str(cfg.BASE_DIR))
+    _write_startup_log("تمت تهيئة البيئة بنجاح.")
 
 
 def _run_migrations():
     """تطبيق ترحيلات قاعدة البيانات (إنشاؤها عند أول تشغيل)."""
+    _write_startup_log("بدء تهيئة Django والترحيلات.")
     import django
     from django.core.management import call_command
 
@@ -63,6 +101,7 @@ def _run_migrations():
 
     if not BackupHistory.objects.filter(status="success", created_at__gte=timezone.now() - timedelta(days=1)).exists():
         call_command("create_backup", automatic=True, verbosity=0)
+    _write_startup_log("اكتملت تهيئة Django والترحيلات.")
 
 
 def _start_server(holder):
@@ -97,26 +136,28 @@ def _wait_for_server(timeout=30):
 
 def main():
     """نقطة الدخول الرئيسية للمشغّل."""
+    _write_startup_log("تشغيل ClinicDataSystem.")
     try:
         _setup_environment()
         print("جارٍ تجهيز قاعدة البيانات…")
         _run_migrations()
 
         print("جارٍ تشغيل الخادم…")
+        _write_startup_log("بدء خادم Waitress.")
         server_holder = {}
         server_thread = threading.Thread(target=_start_server, args=(server_holder,), daemon=True)
         server_thread.start()
 
         if not _wait_for_server():
-            print("خطأ: تعذّر تشغيل الخادم في الوقت المحدد.")
-            sys.exit(1)
+            raise RuntimeError("تعذّر تشغيل الخادم المحلي في الوقت المحدد.")
 
         print(f"الخادم يعمل على {cfg.APP_URL}")
+        _write_startup_log(f"الخادم جاهز على {cfg.APP_URL}.")
 
-        # فتح نافذة سطح المكتب
         try:
             import webview
 
+            _write_startup_log("فتح نافذة pywebview.")
             webview.create_window(
                 cfg.WINDOW_TITLE,
                 cfg.APP_URL,
@@ -128,14 +169,23 @@ def main():
             if server:
                 server.close()
         except ImportError:
-            # في حال عدم توفّر pywebview، أبقِ الخادم يعمل وأخبر المستخدم
-            print(
-                "تعذّر تحميل واجهة سطح المكتب (pywebview غير مثبّت). "
-                f"افتح المتصفح على العنوان: {cfg.APP_URL}"
+            message = (
+                "تعذّر تحميل واجهة سطح المكتب (pywebview غير متوفر). "
+                f"يمكن فتح المتصفح على: {cfg.APP_URL}"
             )
+            _write_startup_log(message)
+            _show_error_dialog(message)
             server_thread.join()
 
     except Exception as exc:  # noqa: BLE001
+        details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        _write_startup_log("حدث خطأ أثناء التشغيل:\n" + details)
+        message = (
+            "تعذّر تشغيل ClinicDataSystem.\n\n"
+            f"الخطأ: {exc}\n\n"
+            f"تم حفظ التفاصيل في:\n{_startup_log_path()}"
+        )
+        _show_error_dialog(message)
         print("حدث خطأ أثناء تشغيل التطبيق:")
         print(str(exc))
         sys.exit(1)
