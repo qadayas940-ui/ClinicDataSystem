@@ -90,7 +90,7 @@ def _run_migrations():
         destination.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(datetime_timezone.utc).strftime("%Y%m%d-%H%M%S")
         shutil.copy2(db_path, destination / f"clinic-before-update-{stamp}.db")
-    call_command("migrate", interactive=False, verbosity=1)
+    call_command("migrate", interactive=False, verbosity=0)
     call_command("init_data", verbosity=0)
     call_command("collectstatic", interactive=False, verbosity=0)
     from datetime import timedelta
@@ -139,11 +139,10 @@ def main():
     _write_startup_log("تشغيل ClinicDataSystem.")
     try:
         _setup_environment()
-        print("جارٍ تجهيز قاعدة البيانات…")
+        _write_startup_log("جارٍ تجهيز قاعدة البيانات.")
         _run_migrations()
 
-        print("جارٍ تشغيل الخادم…")
-        _write_startup_log("بدء خادم Waitress.")
+        _write_startup_log("جارٍ تشغيل الخادم.")
         server_holder = {}
         server_thread = threading.Thread(target=_start_server, args=(server_holder,), daemon=True)
         server_thread.start()
@@ -151,7 +150,6 @@ def main():
         if not _wait_for_server():
             raise RuntimeError("تعذّر تشغيل الخادم المحلي في الوقت المحدد.")
 
-        print(f"الخادم يعمل على {cfg.APP_URL}")
         _write_startup_log(f"الخادم جاهز على {cfg.APP_URL}.")
 
         try:
@@ -186,8 +184,6 @@ def main():
             f"تم حفظ التفاصيل في:\n{_startup_log_path()}"
         )
         _show_error_dialog(message)
-        print("حدث خطأ أثناء تشغيل التطبيق:")
-        print(str(exc))
         sys.exit(1)
 
 
