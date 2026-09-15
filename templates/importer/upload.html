@@ -1,4 +1,21 @@
 {% extends "base.html" %}{% block title %}استيراد Excel{% endblock %}{% block content %}
-<section class="page-head"><div><h1>📥 تحليل ملف Excel</h1><p>يحفظ المصدر كما هو، يفحص كل الأوراق والصفوف، ولا يدمج المرضى تلقائياً.</p></div></section>
-<div class="panel form-panel"><div class="notice warning"><b>قبل المتابعة</b><span>قد يستغرق الملف الكبير عدة دقائق. لا تغلق النافذة حتى تظهر النتيجة.</span></div><form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary" type="submit">رفع وتحليل الملف بالكامل</button></form></div>
+<section class="page-head"><div><h1>📥 تحليل ملف Excel</h1><p>يحفظ المصدر كما هو، يفحص كل الأوراق والصفوف، ولا يدمج المرضى تلقائياً.</p></div><div class="button-row"><a class="btn btn-secondary" href="{% url 'importer:list' %}">رجوع للدفعات</a><a class="btn btn-secondary" href="{% url 'core:dashboard' %}">الرئيسية</a></div></section>
+<div class="panel form-panel import-panel">
+  <div class="notice warning"><b>قبل المتابعة</b><span>قد يستغرق الملف الكبير عدة دقائق. لا تغلق النافذة حتى تظهر النتيجة.</span></div>
+  <form method="post" enctype="multipart/form-data" class="upload-form">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+    <label class="upload-box" for="{{ form.workbook.id_for_label }}">
+      <span class="upload-icon">📊</span>
+      <strong>اختر ملف Excel للتحليل الكامل</strong>
+      <small>الصيغ المقبولة: XLSX و XLSM. لن يتم تعديل الملف الأصلي.</small>
+      {{ form.workbook }}
+      {% for error in form.workbook.errors %}<small class="error-text">{{ error }}</small>{% endfor %}
+    </label>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">رفع وتحليل الملف بالكامل</button>
+      <button class="btn btn-secondary" type="button" onclick="history.back()">رجوع</button>
+    </div>
+  </form>
+</div>
 {% endblock %}
