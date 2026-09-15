@@ -1,7 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+
 from PyInstaller.utils.hooks import collect_submodules
 
-hidden = collect_submodules("django") + collect_submodules("apps") + ["config.settings.production"]
+# The Django PyInstaller hook imports the configured settings while analysing
+# the bundle. Point it at test settings for build-time discovery only;
+# launcher.py selects production settings when the installed app starts.
+os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings.testing"
+
+hidden = (
+    collect_submodules("django")
+    + collect_submodules("apps")
+    + collect_submodules("whitenoise")
+    + ["config.settings.production", "whitenoise.storage"]
+)
 
 a = Analysis(
     ["launcher.py"],
