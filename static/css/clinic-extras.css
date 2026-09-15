@@ -1,0 +1,56 @@
+.import-panel {
+  max-width: 980px;
+}
+
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.upload-box {
+  align-items: center;
+  background: #f8fcff;
+  border: 2px dashed #9dc8e4;
+  border-radius: 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 26px;
+  text-align: center;
+  transition: 0.15s;
+}
+
+.upload-box:hover {
+  background: #eef8ff;
+  border-color: var(--blue);
+}
+
+.upload-icon {
+  background: var(--sky);
+  border-radius: 16px;
+  font-size: 2.4rem;
+  padding: 10px 15px;
+}
+
+.upload-box strong {
+  font-size: 1.1rem;
+}
+
+.upload-box input[type="file"] {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  margin-top: 8px;
+  padding: 10px;
+  width: min(520px, 100%);
+}
+
+.calculated-age {
+  color: #17679e;
+  display: block;
+  font-weight: 650;
+  margin-top: 5px;
+}
