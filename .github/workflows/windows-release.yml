@@ -69,6 +69,11 @@ jobs:
         run: python -m ruff check .
 
       - name: Build desktop bundle
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          CLINIC_DATA_PATH: ${{ runner.temp }}\ClinicDataSystem-build-data
+          SECRET_KEY: pyinstaller-build-only-secret
+          ALLOWED_HOSTS: 127.0.0.1,localhost
         run: pyinstaller --clean --noconfirm ClinicDataSystem.spec
 
       - name: Verify desktop executable exists
