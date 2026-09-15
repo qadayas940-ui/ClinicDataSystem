@@ -45,6 +45,19 @@ Filename: "{app}\{#MyAppExeName}"; Description: "تشغيل ClinicDataSystem"; F
 var
   DataPage: TInputDirWizardPage;
 
+function EncodeCodepoints(Value: String): String;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 1 to Length(Value) do
+  begin
+    if Result <> '' then
+      Result := Result + ',';
+    Result := Result + IntToStr(Ord(Value[I]));
+  end;
+end;
+
 procedure InitializeWizard;
 begin
   DataPage := CreateInputDirPage(wpSelectDir,
@@ -58,7 +71,7 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  ConfigDir, JsonPath, SafePath, JsonContent: String;
+  ConfigDir, JsonPath, SafePath, JsonContent, Codepoints: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -67,8 +80,9 @@ begin
     JsonPath := ConfigDir + '\desktop.json';
     SafePath := DataPage.Values[0];
     StringChangeEx(SafePath, '\', '/', True);
-    JsonContent := '{"data_path":"' + SafePath + '","allow_lan":false,"port":8765}';
-    if not SaveStringToUTF8File(JsonPath, JsonContent, False) then
+    Codepoints := EncodeCodepoints(SafePath);
+    JsonContent := '{"data_path_codepoints":"' + Codepoints + '","allow_lan":false,"port":8765}';
+    if not SaveStringToFile(JsonPath, JsonContent, False) then
       RaiseException('تعذّر حفظ إعدادات مسار بيانات العيادة.');
   end;
 end;
