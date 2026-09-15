@@ -2,38 +2,93 @@ name: Windows installer
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: ["develop"]
   push:
-    branches: ["codex/v1-complete"]
+    branches: ["develop"]
     tags: ["v*"]
 
 permissions:
   contents: write
 
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            requirements-build.txt
+
       - name: Install dependencies
-        run: pip install -r requirements-build.txt
-      - name: Verify application
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt -r requirements-dev.txt
+
+      - name: Django system check
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.testing
+        run: python manage.py check
+
+      - name: Verify migrations are committed
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.testing
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run automated tests
         env:
           DJANGO_SETTINGS_MODULE: config.settings.testing
         run: python manage.py test
+
+      - name: Lint Python source
+        run: python -m ruff check .
+
       - name: Build desktop bundle
         run: pyinstaller --clean --noconfirm ClinicDataSystem.spec
+
+      - name: Verify desktop executable exists
+        shell: pwsh
+        run: |
+          $exe = "dist\ClinicDataSystem\ClinicDataSystem.exe"
+          if (-not (Test-Path $exe)) {
+            throw "Desktop executable was not created: $exe"
+          }
+
       - name: Build installer
+        shell: pwsh
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ClinicDataSystem.iss'
+
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "release\ClinicDataSystem-Setup-*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $installer) {
+            throw "Windows installer was not created."
+          }
+          Write-Host "Installer: $($installer.FullName)"
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: ClinicDataSystem-Windows
           path: release/*.exe
           if-no-files-found: error
+          retention-days: 14
+
       - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
