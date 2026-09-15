@@ -16,6 +16,7 @@ __pycache__/
 .eggs/
 build/
 dist/
+release/
 .venv/
 venv/
 env/
