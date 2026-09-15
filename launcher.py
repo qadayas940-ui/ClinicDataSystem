@@ -10,6 +10,7 @@
 يعالج الأخطاء ويعرضها للمستخدم برسائل عربية مفهومة.
 """
 import ctypes
+import io
 import os
 import secrets
 import shutil
@@ -90,9 +91,15 @@ def _run_migrations():
         destination.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(datetime_timezone.utc).strftime("%Y%m%d-%H%M%S")
         shutil.copy2(db_path, destination / f"clinic-before-update-{stamp}.db")
-    call_command("migrate", interactive=False, verbosity=0)
-    call_command("init_data", verbosity=0)
-    call_command("collectstatic", interactive=False, verbosity=0)
+
+    command_output = io.StringIO()
+    command_error = io.StringIO()
+    common = {"stdout": command_output, "stderr": command_error}
+
+    call_command("migrate", interactive=False, verbosity=0, **common)
+    call_command("init_data", verbosity=0, **common)
+    call_command("collectstatic", interactive=False, verbosity=0, **common)
+
     from datetime import timedelta
 
     from django.utils import timezone
@@ -100,7 +107,14 @@ def _run_migrations():
     from apps.core.models import BackupHistory
 
     if not BackupHistory.objects.filter(status="success", created_at__gte=timezone.now() - timedelta(days=1)).exists():
-        call_command("create_backup", automatic=True, verbosity=0)
+        call_command("create_backup", automatic=True, verbosity=0, **common)
+
+    buffered = command_output.getvalue().strip()
+    errors = command_error.getvalue().strip()
+    if buffered:
+        _write_startup_log("Django output:\n" + buffered)
+    if errors:
+        _write_startup_log("Django stderr:\n" + errors)
     _write_startup_log("اكتملت تهيئة Django والترحيلات.")
 
 
