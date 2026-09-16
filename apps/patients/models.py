@@ -50,6 +50,10 @@ class Patient(SoftDeleteModel):
     source_sheet = models.CharField("ورقة المصدر", max_length=200, blank=True, default="")
     source_row = models.PositiveIntegerField("صف المصدر", null=True, blank=True)
     imported_at = models.DateTimeField("تاريخ الاستيراد", null=True, blank=True)
+    imported_visit_count = models.PositiveIntegerField(
+        "عدد المراجعات حسب الملف المستورد", default=0,
+        help_text="يحفظ العدد التاريخي الوارد في Excel عندما لا تتوفر تفاصيل كل زيارة.",
+    )
     additional_data = models.JSONField("البيانات الإضافية", default=dict, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -94,6 +98,11 @@ class Patient(SoftDeleteModel):
     @property
     def latest_source_row(self):
         return self.source_rows.select_related("sheet").order_by("-batch_id", "-original_row_number").first()
+
+    @property
+    def total_visit_count(self):
+        """العدد المحفوظ فعلياً أو العدد التاريخي من Excel، أيهما أكبر."""
+        return max(self.visits.count(), self.imported_visit_count or 0)
 
 
 class PatientSequence(models.Model):
