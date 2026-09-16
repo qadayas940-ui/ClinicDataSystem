@@ -1,6 +1,6 @@
 # دليل تثبيت نظام إدارة العيادة
 
-هذا الدليل خاص بنسخة Windows التي يتم إخراجها باسم `ClinicDataSystem-Setup-1.1.0.exe`.
+هذا الدليل خاص بنسخة Windows التي يتم إخراجها باسم `ClinicDataSystem-Setup-1.2.0.exe`.
 
 ## التثبيت
 
@@ -60,7 +60,7 @@ pyinstaller --clean --noconfirm ClinicDataSystem.spec
 
 ينتج الملف النهائي داخل:
 
-`release\ClinicDataSystem-Setup-1.1.0.exe`
+`release\ClinicDataSystem-Setup-1.2.0.exe`
 
 ## بيانات المرضى
 
