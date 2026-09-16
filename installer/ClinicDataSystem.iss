@@ -105,8 +105,10 @@ begin
     ForceDirectories(ConfigDir);
     JsonPath := ConfigDir + '\desktop.json';
     ForceDirectories(DataDirPage.Values[0]);
-    SafePath := StringChangeEx(DataDirPage.Values[0], '\', '/', True);
-    SafeServer := StringChangeEx(Trim(ServerPage.Values[0]), '\', '/', True);
+    SafePath := DataDirPage.Values[0];
+    StringChangeEx(SafePath, '\', '/', True);
+    SafeServer := Trim(ServerPage.Values[0]);
+    StringChangeEx(SafeServer, '\', '/', True);
     SaveStringToFile(JsonPath, '{"data_path":"' + SafePath + '","server_url":"' + SafeServer + '","allow_lan":false,"port":8765,"allow_sqlite_production":true}', False);
   end;
 end;
