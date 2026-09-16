@@ -18,7 +18,8 @@ class ReferralForm(PatientCodeModelFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["referring_doctor"].queryset = User.objects.filter(role__code=Role.CODE_DOCTOR, is_active=True)
-        self.fields["referral_date"].initial = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+        if not self.instance.pk:
+            self.fields["referral_date"].initial = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
         for field in self.fields.values(): field.widget.attrs.setdefault("class", "form-control")
 
     def save(self, commit=True):

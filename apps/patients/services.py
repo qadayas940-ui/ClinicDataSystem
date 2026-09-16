@@ -164,6 +164,7 @@ def create_patient(cleaned_data, user):
         source_sheet=cleaned_data.get("source_sheet", ""),
         source_row=cleaned_data.get("source_row"),
         imported_at=cleaned_data.get("imported_at"),
+        imported_visit_count=cleaned_data.get("imported_visit_count") or 0,
         additional_data=cleaned_data.get("additional_data") or {},
     )
     full_name = cleaned_data["full_name"].strip()

@@ -105,6 +105,7 @@ def _run_migrations():
     command_output = StringIO()
     call_command("migrate", interactive=False, verbosity=1, stdout=command_output, stderr=command_output)
     call_command("init_data", verbosity=0, stdout=command_output, stderr=command_output)
+    call_command("repair_imported_data", verbosity=0, stdout=command_output, stderr=command_output)
     call_command("collectstatic", interactive=False, verbosity=0, stdout=command_output, stderr=command_output)
     from datetime import timedelta
 

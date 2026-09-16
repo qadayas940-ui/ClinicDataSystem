@@ -62,6 +62,7 @@ SHEET_PROFILES = {
     "الاحالات": [("ت", "sequence"), ("الاسم", "name"), ("الطبيب", "doctor")],
     "عياده العيون": [("ت", "sequence"), ("الاسم", "name"), ("العمر", "age"), ("الجنس", "gender"), ("المنطقه", "address")],
 }
+IMPORT_REPAIR_MARKER = "[import-repair-v1.3-complete]"
 
 
 def _text(value):
@@ -269,6 +270,15 @@ def _validate(canonical, raw):
     return issues, reasons
 
 
+def _repair_swapped_age_gender(canonical):
+    """Repair rows where the legacy workbook swaps age/gender columns mid-sheet."""
+    age = normalize_arabic(canonical.get("age"))
+    gender = _text(canonical.get("gender"))
+    if age in {normalize_arabic(key) for key in GENDERS} and re.fullmatch(r"\d+(?:\.0+)?", gender):
+        canonical["age"], canonical["gender"] = canonical.get("gender"), canonical.get("age")
+    return canonical
+
+
 @transaction.atomic
 def analyze_workbook(file_path, digest, original_filename, user, import_type="patients"):
     duplicate = ImportBatch.objects.filter(file_hash=digest, import_type=import_type, status__in=["reviewing", "completed"]).first()
@@ -316,6 +326,7 @@ def analyze_workbook(file_path, digest, original_filename, user, import_type="pa
                     if i < len(headers) and isinstance(value, str) and value.startswith("=") and cached_values[i] is not None
                 }
                 canonical = {mapping[key]: evaluated.get(key, value) for key, value in raw.items() if key in mapping}
+                canonical = _repair_swapped_age_gender(canonical)
                 if profile and not _text(canonical.get("name")):
                     # الأوراق الأربع تحتوي أسطراً حسابية بعد البيانات؛ الاسم هو علامة السجل الفعلي.
                     continue
@@ -456,6 +467,23 @@ def _positive_count(value):
     return max(0, min(100000, int(match.group()))) if match else 0
 
 
+def source_repeat_count(raw_data):
+    """Read COUNTIF's cached result, never the row number embedded in its formula."""
+    canonical = raw_data.get("canonical", {})
+    direct = canonical.get("repeat_count")
+    if isinstance(direct, (int, float)):
+        return _positive_count(direct)
+    evaluated = raw_data.get("evaluated", {})
+    for header, value in evaluated.items():
+        if _canonical_header(header) == "repeat_count" and isinstance(value, (int, float)):
+            return _positive_count(value)
+    source = raw_data.get("source", {})
+    for header, value in source.items():
+        if _canonical_header(header) == "repeat_count" and isinstance(value, (int, float)):
+            return _positive_count(value)
+    return 0
+
+
 def _date(value):
     if isinstance(value, datetime):
         return value.date()
@@ -473,7 +501,9 @@ def _match_existing_patient(name, phone, birth_date, gender, address):
         phone_matches = Patient.objects.filter(contacts__value=phone).distinct()
         if phone_matches.count() == 1:
             return phone_matches.first()
-    candidates = Patient.objects.filter(names__full_name__iexact=name).distinct()
+    from apps.patients.services import normalize_arabic_text
+
+    candidates = Patient.objects.filter(names__normalized_name=normalize_arabic_text(name)).distinct()
     if birth_date:
         candidates = candidates.filter(date_of_birth=birth_date)
     if gender and gender != "unknown":
@@ -482,7 +512,12 @@ def _match_existing_patient(name, phone, birth_date, gender, address):
         address_matches = candidates.filter(addresses__text__iexact=address).distinct()
         if address_matches.count() == 1:
             return address_matches.first()
-    return candidates.first() if candidates.count() == 1 else None
+    if candidates.count() == 1:
+        return candidates.first()
+    # The historical workbook has no stable patient key beyond the normalized
+    # name.  Reuse the first imported record deterministically so every source
+    # row remains visible instead of creating a new patient for every repeat.
+    return candidates.filter(source_type="excel").order_by("created_at", "pk").first()
 
 
 @transaction.atomic
@@ -505,14 +540,12 @@ def import_batch_records(batch, user, source_row=None):
         )
         return 0
 
-    rows = batch.rows.select_related("sheet").filter(linked_patient__isnull=True).filter(
-        models.Q(classification="ready") | models.Q(classification="repeat_visit") | models.Q(status="accepted")
-    )
+    rows = batch.rows.select_related("sheet").filter(linked_patient__isnull=True).exclude(status="rejected")
     if source_row is not None:
         rows = rows.filter(pk=source_row.pk)
     imported = 0
     for row in rows.iterator(chunk_size=500):
-        canonical = row.raw_data.get("canonical", {})
+        canonical = _repair_swapped_age_gender(dict(row.raw_data.get("canonical", {})))
         name = _text(canonical.get("name"))
         if not name:
             continue
@@ -528,7 +561,7 @@ def import_batch_records(batch, user, source_row=None):
         diagnosis = _reference("diagnosis", canonical.get("status"))
         source_date = _date(canonical.get("date"))
         birth_date = _date(canonical.get("birth_date"))
-        imported_visit_count = _positive_count(canonical.get("repeat_count"))
+        imported_visit_count = source_repeat_count(row.raw_data)
         external_id = _text(canonical.get("external_id")) or (
             f"XLS-{batch.file_hash[:10].upper()}-{row.sheet.sheet_index + 1}-{row.original_row_number}"
         )
@@ -546,6 +579,7 @@ def import_batch_records(batch, user, source_row=None):
             "source_sheet": row.sheet.sheet_name,
             "source_row": row.original_row_number,
             "imported_at": timezone.now(),
+            "imported_visit_count": imported_visit_count,
             "additional_data": {
                 "source_columns": row.raw_data.get("source", {}),
                 "unmapped_columns": row.raw_data.get("additional", {}),
@@ -566,8 +600,6 @@ def import_batch_records(batch, user, source_row=None):
                 "visit_type": "imported_historical",
             })
         patient = _match_existing_patient(name, phone, birth_date, gender, payload["address"])
-        if row.classification == "repeat_visit" and patient is None and row.status != "accepted":
-            continue
         if patient is None:
             patient = create_patient(payload, user)
         elif sheet_name == "مراجعه المرضي":
@@ -599,6 +631,15 @@ def import_batch_records(batch, user, source_row=None):
                 destination_name=_text(canonical.get("doctor")),
                 referral_date=timezone.now(), status="pending",
             )
+        elif sheet_name == "عياده العيون":
+            from apps.ophthalmology.models import EyeClinicVisit
+
+            EyeClinicVisit.objects.create(
+                patient=patient,
+                visit_date=timezone.now(),
+                notes=_text(canonical.get("notes")),
+                status="open",
+            )
         row.linked_patient = patient
         row.imported_at = timezone.now()
         row.status = "accepted"
@@ -607,7 +648,9 @@ def import_batch_records(batch, user, source_row=None):
     if source_row is None:
         batch.status = "completed"
         batch.completed_at = timezone.now()
-        batch.save(update_fields=["status", "completed_at"])
+        if IMPORT_REPAIR_MARKER not in batch.notes:
+            batch.notes = f"{batch.notes}\n{IMPORT_REPAIR_MARKER}".strip()
+        batch.save(update_fields=["status", "completed_at", "notes"])
     Notification.objects.create(
         user=user, event_type="import_completed", title="اكتمل إدراج ملف Excel" if source_row is None else "تم إدراج سجل من Excel",
         message=f"تم إدراج {imported} سجل من {batch.original_filename}",

@@ -30,3 +30,21 @@ def order_create(request, patient_id=None):
         messages.success(request, "تم تسجيل طلب المختبر.")
         return redirect("laboratory:list")
     return render(request, "shared/form.html", {"form": form, "title": "طلب مختبر جديد", "submit_label": "حفظ الطلب"})
+
+
+@roles_required("doctor", "organizer", "data_auditor")
+@transaction.atomic
+def order_edit(request, pk):
+    order = get_object_or_404(LabOrder.objects.prefetch_related("tests"), pk=pk)
+    form = LabOrderForm(request.POST or None, instance=order, patient=order.patient)
+    if request.method == "POST" and form.is_valid():
+        order = form.save()
+        test = order.tests.first() or LabOrderTest(lab_order=order)
+        test.test_name = form.cleaned_data["test_name"]
+        test.result_value = form.cleaned_data.get("result_value", "")
+        test.unit = form.cleaned_data.get("unit", "")
+        test.save()
+        log_audit(request, "update", "LabOrder", order.pk, str(order))
+        messages.success(request, "تم تحديث طلب المختبر وبياناته.")
+        return redirect("laboratory:list")
+    return render(request, "shared/form.html", {"form": form, "title": "تعديل طلب المختبر", "submit_label": "حفظ التعديلات"})

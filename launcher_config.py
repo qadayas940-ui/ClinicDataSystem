@@ -45,10 +45,10 @@ def _default_data_path():
 DATA_PATH = os.environ.get("CLINIC_DATA_PATH") or DESKTOP_CONFIG.get("data_path") or _default_data_path()
 
 # إعدادات الخادم المحلي
-ALLOW_LAN = os.environ.get("CLINIC_ALLOW_LAN", str(DESKTOP_CONFIG.get("allow_lan", False))).lower() in {"1", "true", "yes"}
+ALLOW_LAN = os.environ.get("CLINIC_ALLOW_LAN", str(DESKTOP_CONFIG.get("allow_lan", True))).lower() in {"1", "true", "yes"}
 HOST = "0.0.0.0" if ALLOW_LAN else "127.0.0.1"
 PORT = int(os.environ.get("CLINIC_PORT", DESKTOP_CONFIG.get("port", 8765)))
-THREADS = 4  # خفيف على ذاكرة 8GB
+THREADS = max(8, min(32, int(os.environ.get("CLINIC_SERVER_THREADS", "24"))))
 DATABASE_URL = os.environ.get("DATABASE_URL") or DESKTOP_CONFIG.get("database_url", "")
 ALLOW_SQLITE_PRODUCTION = bool(DESKTOP_CONFIG.get("allow_sqlite_production", not DATABASE_URL))
 REMOTE_SERVER_URL = (os.environ.get("CLINIC_SERVER_URL") or DESKTOP_CONFIG.get("server_url", "")).strip().rstrip("/")

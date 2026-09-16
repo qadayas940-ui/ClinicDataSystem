@@ -20,5 +20,12 @@ class LabOrderForm(PatientCodeModelFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["requesting_doctor"].queryset = User.objects.filter(role__code=Role.CODE_DOCTOR, is_active=True)
-        self.fields["order_date"].initial = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+        if not self.instance.pk:
+            self.fields["order_date"].initial = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+        elif not self.is_bound:
+            test = self.instance.tests.first()
+            if test:
+                self.fields["test_name"].initial = test.test_name
+                self.fields["result_value"].initial = test.result_value
+                self.fields["unit"].initial = test.unit
         for field in self.fields.values(): field.widget.attrs.setdefault("class", "form-control")

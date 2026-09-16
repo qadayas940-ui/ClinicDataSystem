@@ -27,3 +27,15 @@ def referral_create(request, patient_id=None):
         messages.success(request, "تم إنشاء الإحالة ورمزها الآمن.")
         return redirect("referrals:list")
     return render(request, "shared/form.html", {"form": form, "title": "إحالة جديدة", "submit_label": "حفظ الإحالة"})
+
+
+@roles_required("doctor", "organizer", "data_auditor")
+def referral_edit(request, pk):
+    item = get_object_or_404(Referral, pk=pk)
+    form = ReferralForm(request.POST or None, instance=item, patient=item.patient)
+    if request.method == "POST" and form.is_valid():
+        item = form.save()
+        log_audit(request, "update", "Referral", item.pk, str(item))
+        messages.success(request, "تم تحديث الإحالة وبياناتها.")
+        return redirect("referrals:list")
+    return render(request, "shared/form.html", {"form": form, "title": "تعديل الإحالة", "submit_label": "حفظ التعديلات"})

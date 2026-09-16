@@ -6,6 +6,7 @@ import zipfile
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -14,10 +15,13 @@ from openpyxl import Workbook, load_workbook
 
 from apps.accounts.models import Role
 from apps.core.models import Department, Notification, ReferenceValue
-from apps.importer.services import analyze_workbook, import_batch_records
+from apps.importer.models import ImportBatch, ImportSheet, SourceRow
+from apps.importer.services import analyze_workbook, import_batch_records, source_repeat_count
+from apps.laboratory.models import LabOrder, LabOrderTest
 from apps.patients.forms import PatientForm
 from apps.patients.models import Patient
 from apps.patients.services import create_patient, find_patient_candidates
+from apps.referrals.models import Referral
 from apps.visits.models import Visit
 
 User = get_user_model()
@@ -168,6 +172,26 @@ class ImportAnalysisTests(TestCase):
         imported_patient = Patient.objects.get(names__full_name="علي حسن كامل")
         self.assertEqual(imported_patient.imported_visit_count, 2)
         self.assertEqual(imported_patient.total_visit_count, 2)
+        self.assertFalse(batch.rows.filter(linked_patient__isnull=True).exists())
+
+    def test_formula_text_never_becomes_visit_count(self):
+        raw = {
+            "source": {"عدد التكرار": "=COUNTIF($B:$B,B29311)"},
+            "evaluated": {"عدد التكرار": 3},
+            "canonical": {"repeat_count": "=COUNTIF($B:$B,B29311)"},
+        }
+        self.assertEqual(source_repeat_count(raw), 3)
+
+    def test_repair_command_corrects_corrupt_count_from_cached_excel_value(self):
+        role = Role.objects.create(name="مدقق إصلاح", code=Role.CODE_AUDITOR)
+        user = User.objects.create_user(username="repair-auditor", password="StrongPass123", role=role)
+        patient = create_patient({"full_name": "مريض إصلاح عداد", "gender": "male", "approx_age_value": 30, "approx_age_unit": "year", "phone": "", "address": "الموصل", "source_type": "excel", "imported_visit_count": 29311}, user)
+        batch = ImportBatch.objects.create(file_hash="a" * 64, original_filename="repair.xlsx", import_type="patients", status="completed", imported_by=user)
+        sheet = ImportSheet.objects.create(batch=batch, sheet_name="مراجعة المرضى", sheet_index=0)
+        SourceRow.objects.create(batch=batch, sheet=sheet, original_row_number=29311, row_hash="b" * 64, linked_patient=patient, status="accepted", raw_data={"source": {"عدد التكرار": "=COUNTIF($B:$B,B29311)"}, "evaluated": {"عدد التكرار": 2}, "canonical": {"name": "مريض إصلاح عداد", "repeat_count": "=COUNTIF($B:$B,B29311)"}})
+        call_command("repair_imported_data", verbosity=0)
+        patient.refresh_from_db()
+        self.assertEqual(patient.imported_visit_count, 2)
 
     def test_imported_registry_opens_every_imported_patient_drawer(self):
         role = Role.objects.create(name="مدقق", code=Role.CODE_AUDITOR)
