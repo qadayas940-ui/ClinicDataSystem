@@ -52,13 +52,14 @@ class Command(BaseCommand):
 
     def _create_app_version(self):
         from apps.core.models import AppVersion
+        AppVersion.objects.exclude(version_number="1.2.0").update(is_current=False)
         ver, created = AppVersion.objects.get_or_create(
-            version_number="1.1.0",
+            version_number="1.2.0",
             defaults={
                 "channel": "develop",
                 "is_current": True,
                 "release_date": timezone.now().date(),
-                "db_schema_version": "1",
+                "db_schema_version": "2",
                 "notes": "إصدار عيادة الموصل الخيرية للإنتاج",
             },
         )
