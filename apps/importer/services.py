@@ -451,6 +451,11 @@ def _age(value):
     return number, unit
 
 
+def _positive_count(value):
+    match = re.search(r"\d+", _text(value))
+    return max(0, min(100000, int(match.group()))) if match else 0
+
+
 def _date(value):
     if isinstance(value, datetime):
         return value.date()
@@ -523,6 +528,7 @@ def import_batch_records(batch, user, source_row=None):
         diagnosis = _reference("diagnosis", canonical.get("status"))
         source_date = _date(canonical.get("date"))
         birth_date = _date(canonical.get("birth_date"))
+        imported_visit_count = _positive_count(canonical.get("repeat_count"))
         external_id = _text(canonical.get("external_id")) or (
             f"XLS-{batch.file_hash[:10].upper()}-{row.sheet.sheet_index + 1}-{row.original_row_number}"
         )
@@ -543,6 +549,7 @@ def import_batch_records(batch, user, source_row=None):
             "additional_data": {
                 "source_columns": row.raw_data.get("source", {}),
                 "unmapped_columns": row.raw_data.get("additional", {}),
+                "imported_visit_count": imported_visit_count,
             },
         }
         sheet_name = normalize_arabic(row.sheet.sheet_name)
@@ -579,6 +586,9 @@ def import_batch_records(batch, user, source_row=None):
                 notes=_text(canonical.get("notes")),
                 source="excel",
             )
+        if imported_visit_count > patient.imported_visit_count:
+            patient.imported_visit_count = imported_visit_count
+            patient.save(update_fields=["imported_visit_count", "updated_at"])
         if sheet_name == "المختبر":
             order = LabOrder.objects.create(patient=patient, order_date=timezone.now(), status="pending", notes=_text(canonical.get("notes")))
             if _text(canonical.get("test")):
