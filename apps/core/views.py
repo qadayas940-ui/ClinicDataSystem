@@ -168,6 +168,13 @@ def dashboard(request):
         "pending_referrals": referral_qs.filter(status="pending").count(),
         "department_count": Department.objects.filter(is_active=True).count(),
         "doctor_count": ReferenceValue.objects.filter(category="doctor", is_active=True).count(),
+        "active_departments": Department.objects.filter(is_active=True).annotate(
+            doctor_total=models.Count(
+                "reference_values",
+                filter=models.Q(reference_values__category="doctor", reference_values__is_active=True),
+                distinct=True,
+            )
+        ).order_by("name"),
         "period": period, "start": start, "end": end,
         "visits_by_department": visit_qs.values("department__name").annotate(total=models.Count("id")).order_by("-total")[:8],
     }
@@ -245,14 +252,26 @@ def department_archive(request, pk):
 
 
 def _local_ip():
+    candidates = []
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         sock.connect(("192.0.2.1", 80))
-        return sock.getsockname()[0]
+        candidates.append(sock.getsockname()[0])
     except OSError:
-        return "127.0.0.1"
+        pass
     finally:
         sock.close()
+    try:
+        candidates.extend(socket.gethostbyname_ex(socket.gethostname())[2])
+    except OSError:
+        pass
+    for candidate in candidates:
+        try:
+            if candidate != "127.0.0.1" and __import__("ipaddress").ip_address(candidate).is_private:
+                return candidate
+        except ValueError:
+            continue
+    return "127.0.0.1"
 
 
 @owner_required
