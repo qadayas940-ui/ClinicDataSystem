@@ -81,6 +81,8 @@ def _setup_environment():
         os.environ.setdefault("DATABASE_URL", cfg.DATABASE_URL)
     if cfg.ALLOW_SQLITE_PRODUCTION:
         os.environ.setdefault("ALLOW_SQLITE_PRODUCTION", "true")
+    os.environ.setdefault("CLINIC_ALLOW_LAN", "true" if cfg.ALLOW_LAN else "false")
+    os.environ.setdefault("CLINIC_PORT", str(cfg.PORT))
     os.environ.setdefault("ALLOWED_HOSTS", "127.0.0.1,localhost,*" if cfg.ALLOW_LAN else "127.0.0.1,localhost")
     sys.path.insert(0, str(cfg.BASE_DIR))
 
@@ -187,6 +189,17 @@ def main():
             sys.exit(1)
 
         print(f"الخادم يعمل على {cfg.APP_URL}")
+        if cfg.ALLOW_LAN:
+            import socket
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    sock.connect(("192.0.2.1", 80))
+                    network_ip = sock.getsockname()[0]
+            except OSError:
+                network_ip = "127.0.0.1"
+            lan_url = f"http://{network_ip}:{cfg.PORT}"
+            _write_startup_log(f"LAN access enabled. url={lan_url}")
+            print(f"رابط أجهزة العيادة: {lan_url}")
 
         if "--server" in sys.argv or os.environ.get("CLINIC_HEADLESS", "").lower() in {"1", "true", "yes"}:
             _write_startup_log("ClinicDataSystem is running in headless LAN/server mode.")

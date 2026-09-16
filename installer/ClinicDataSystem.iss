@@ -11,7 +11,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\MosulCharityClinic
 DisableProgramGroupPage=yes
 DisableDirPage=no
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 OutputDir=..\release
 OutputBaseFilename=ClinicDataSystem-Setup-{#MyAppVersion}
 Compression=lzma2
@@ -37,14 +37,16 @@ Name: "{autodesktop}\ClinicDataSystem"; Filename: "{app}\{#MyAppExeName}"; Tasks
 
 [Tasks]
 Name: "desktopicon"; Description: "إنشاء اختصار على سطح المكتب"; GroupDescription: "اختصارات إضافية:"
-Name: "localserver"; Description: "تشغيل خادم العيادة المحلي تلقائياً عند تسجيل الدخول"; GroupDescription: "وضع الخادم المحلي:"; Flags: unchecked
+Name: "localserver"; Description: "تشغيل خادم العيادة المحلي تلقائياً عند تسجيل الدخول"; GroupDescription: "وضع الخادم المحلي:"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "تشغيل ClinicDataSystem"; Flags: nowait postinstall skipifsilent
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Mosul Charity Clinic Server"" dir=in action=allow program=""{app}\{#MyAppExeName}"" enable=yes profile=private"; Flags: runhidden; Tasks: localserver; Check: ShouldInstallLocalServer
 Filename: "{sys}\schtasks.exe"; Parameters: "/Create /F /SC ONLOGON /TN ""MosulCharityClinicServer"" /TR """"""{app}\{#MyAppExeName}"""" --server"""; Flags: runhidden; Tasks: localserver; Check: ShouldInstallLocalServer
 
 [UninstallRun]
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /F /TN ""MosulCharityClinicServer"""; Flags: runhidden; RunOnceId: "RemoveClinicServerTask"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Mosul Charity Clinic Server"""; Flags: runhidden; RunOnceId: "RemoveClinicFirewallRule"
 
 [Code]
 var
@@ -97,7 +99,7 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  ConfigDir, JsonPath, SafePath, SafeServer: String;
+  ConfigDir, JsonPath, SafePath, SafeServer, AllowLanJson: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -109,6 +111,7 @@ begin
     StringChangeEx(SafePath, '\', '/', True);
     SafeServer := Trim(ServerPage.Values[0]);
     StringChangeEx(SafeServer, '\', '/', True);
-    SaveStringToFile(JsonPath, '{"data_path":"' + SafePath + '","server_url":"' + SafeServer + '","allow_lan":false,"port":8765,"allow_sqlite_production":true}', False);
+    if SafeServer = '' then AllowLanJson := 'true' else AllowLanJson := 'false';
+    SaveStringToFile(JsonPath, '{"data_path":"' + SafePath + '","server_url":"' + SafeServer + '","allow_lan":' + AllowLanJson + ',"port":8765,"allow_sqlite_production":true}', False);
   end;
 end;

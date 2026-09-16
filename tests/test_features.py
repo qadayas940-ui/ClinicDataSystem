@@ -73,6 +73,19 @@ class PatientWorkflowTests(TestCase):
         self.assertContains(response, "بطاقة المريض")
         self.assertContains(response, patient.internal_code)
 
+    def test_patient_drawer_saves_without_server_error(self):
+        patient = create_patient({"full_name": "سارة أحمد محمود علي", "gender": "female", "date_of_birth": None, "approx_age_value": 8, "approx_age_unit": "year", "phone": "07899189225", "address": "الزهور"}, self.user)
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("patients:drawer", args=[patient.pk]), {
+            "full_name": "سارة أحمد محمود حسن", "gender": "female",
+            "approx_age_value": "9", "approx_age_unit": "year",
+            "phone": "07899189225", "address": "الزهور",
+        }, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        patient.refresh_from_db()
+        self.assertEqual(patient.display_name, "سارة أحمد محمود حسن")
+
     def test_live_search_from_first_character_name_phone_and_id(self):
         patient = create_patient({"full_name": "محمد أحمد علي حسن", "gender": "male", "date_of_birth": None, "approx_age_value": 30, "approx_age_unit": "year", "phone": "07701234567", "address": "الموصل"}, self.user)
         self.client.force_login(self.user)

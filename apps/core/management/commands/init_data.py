@@ -66,8 +66,16 @@ class Command(BaseCommand):
             self.stdout.write(f"  + إصدار: {ver.version_number}")
 
     def _create_server_settings(self):
+        import os
+
         from apps.core.models import ServerSettings
-        ServerSettings.objects.get_or_create(pk=1, defaults={"port": 8765, "allow_network_access": False, "bind_address": "127.0.0.1"})
+        allow_lan = os.environ.get("CLINIC_ALLOW_LAN", "false").lower() in {"1", "true", "yes"}
+        port = int(os.environ.get("CLINIC_PORT", "8765"))
+        ServerSettings.objects.update_or_create(pk=1, defaults={
+            "port": port,
+            "allow_network_access": allow_lan,
+            "bind_address": "0.0.0.0" if allow_lan else "127.0.0.1",
+        })
 
     def _create_reference_catalog(self):
         from apps.core.models import Department, ReferenceValue

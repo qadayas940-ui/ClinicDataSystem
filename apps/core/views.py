@@ -267,7 +267,12 @@ def server_settings(request):
             import launcher_config
 
             launcher_config.CONFIG_HOME.mkdir(parents=True, exist_ok=True)
-            payload = {"data_path": str(settings.DATA_PATH), "allow_lan": server.allow_network_access, "port": server.port}
+            payload = dict(getattr(launcher_config, "DESKTOP_CONFIG", {}) or {})
+            payload.update({
+                "data_path": str(settings.DATA_PATH),
+                "allow_lan": server.allow_network_access,
+                "port": server.port,
+            })
             launcher_config.CONFIG_FILE.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         except (ImportError, OSError) as exc:
             logger.warning("تعذر كتابة إعداد سطح المكتب: %s", exc)
