@@ -1,12 +1,16 @@
 import hashlib
+import io
+import json
 import tempfile
+import zipfile
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from openpyxl import Workbook
+from django.test import override_settings
+from openpyxl import Workbook, load_workbook
 
 from apps.accounts.models import Role
 from apps.core.models import Department, Notification, ReferenceValue
@@ -161,9 +165,56 @@ class ImportAnalysisTests(TestCase):
         self.assertIn("source_columns", imported_patient.additional_data)
         self.assertEqual(Patient.objects.filter(names__full_name="علي حسن كامل").count(), 1)
         self.assertEqual(Patient.objects.get(names__full_name="علي حسن كامل").visits.count(), 2)
+        imported_patient = Patient.objects.get(names__full_name="علي حسن كامل")
+        self.assertEqual(imported_patient.imported_visit_count, 2)
+        self.assertEqual(imported_patient.total_visit_count, 2)
+
+    def test_imported_registry_opens_every_imported_patient_drawer(self):
+        role = Role.objects.create(name="مدقق", code=Role.CODE_AUDITOR)
+        user = User.objects.create_user(username="auditor", password="StrongPass123", role=role)
+        patient = create_patient({"full_name": "مريض مستورد كامل علي", "gender": "male", "approx_age_value": 41, "approx_age_unit": "year", "phone": "07701234568", "address": "الموصل"}, user)
+        patient.source_type = "excel"
+        patient.source_sheet = "مراجعة المرضى"
+        patient.source_row = 51
+        patient.save(update_fields=["source_type", "source_sheet", "source_row", "updated_at"])
+        self.client.force_login(user)
+        response = self.client.get(reverse("patients:imported"))
+        self.assertContains(response, patient.internal_code)
+        response = self.client.get(reverse("patients:drawer", args=[patient.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "بطاقة المريض")
 
     def test_gender_variants_are_normalized_without_blocking(self):
         from apps.importer.services import GENDERS, normalize_arabic
 
         for raw, expected in (("رجل", "male"), ("Male", "male"), ("امرأة", "female"), ("F", "female")):
             self.assertEqual(GENDERS[normalize_arabic(raw)], expected)
+
+
+class BackupExportTests(TestCase):
+    def setUp(self):
+        role = Role.objects.create(name="المالك", code=Role.CODE_OWNER)
+        self.user = User.objects.create_user(username="owner-export", password="StrongPass123", role=role)
+        self.patient = create_patient({"full_name": "مريض تصدير كامل علي", "gender": "male", "approx_age_value": 35, "approx_age_unit": "year", "phone": "07705555555", "address": "الموصل"}, self.user)
+        self.client.force_login(self.user)
+
+    def _download(self, route):
+        response = self.client.get(reverse(route))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment", response["Content-Disposition"])
+        return b"".join(response.streaming_content)
+
+    def test_excel_csv_and_json_are_real_downloads(self):
+        with tempfile.TemporaryDirectory() as directory, override_settings(DATA_PATH=Path(directory)):
+            excel = self._download("backup:excel_export")
+            workbook = load_workbook(io.BytesIO(excel), read_only=True)
+            self.assertIn("المرضى", workbook.sheetnames)
+            self.assertGreaterEqual(sum(1 for _ in workbook["المرضى"].iter_rows(values_only=True)), 2)
+            workbook.close()
+
+            csv_archive = self._download("backup:csv_export")
+            with zipfile.ZipFile(io.BytesIO(csv_archive)) as archive:
+                self.assertIn("المرضى.csv", archive.namelist())
+
+            json_data = json.loads(self._download("backup:json_export").decode("utf-8"))
+            self.assertEqual(json_data["المرضى"][0]["الرقم"], self.patient.internal_code)
