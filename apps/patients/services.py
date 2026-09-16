@@ -2,7 +2,7 @@ import re
 from datetime import datetime, time
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -132,7 +132,18 @@ def normalize_phone(value):
 
 def _new_code():
     year = timezone.localdate().year
-    sequence, _ = PatientSequence.objects.select_for_update().get_or_create(year=year)
+    if connection.vendor == "postgresql":
+        # Prevent the first two concurrent registrations from racing to create
+        # the same yearly sequence row. The subsequent row lock serializes IDs.
+        table = connection.ops.quote_name(PatientSequence._meta.db_table)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"INSERT INTO {table} (year, last_value) VALUES (%s, 0) ON CONFLICT (year) DO NOTHING",
+                [year],
+            )
+        sequence = PatientSequence.objects.select_for_update().get(year=year)
+    else:
+        sequence, _ = PatientSequence.objects.select_for_update().get_or_create(year=year)
     sequence.last_value += 1
     sequence.save(update_fields=["last_value"])
     return f"CLN{str(year)[-2:]}-{sequence.last_value:010d}"
