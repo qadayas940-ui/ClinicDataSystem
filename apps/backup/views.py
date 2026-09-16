@@ -8,7 +8,7 @@ from django.shortcuts import redirect, render
 from apps.core.models import BackupHistory
 from apps.core.utils import log_audit, owner_required
 
-from .services import create_database_backup, create_excel_export
+from .services import create_csv_export, create_database_backup, create_excel_export, create_json_export
 
 
 @owner_required
@@ -19,9 +19,12 @@ def backup_list(request):
 @owner_required
 def backup_create(request):
     if request.method == "POST":
-        item = create_database_backup(request.user)
-        log_audit(request, "export", "BackupHistory", item.pk, item.checksum)
-        messages.success(request, "تم إنشاء نسخة احتياطية كاملة والتحقق من بصمتها.")
+        try:
+            item = create_database_backup(request.user)
+            log_audit(request, "export", "BackupHistory", item.pk, item.checksum)
+            messages.success(request, "تم إنشاء نسخة احتياطية كاملة والتحقق من بصمتها.")
+        except Exception:
+            messages.error(request, "تعذر إنشاء النسخة الاحتياطية. راجع سجل النظام أو إعداد اتصال قاعدة البيانات.")
     return redirect("backup:list")
 
 
@@ -37,6 +40,24 @@ def backup_download(request, pk):
 
 @owner_required
 def excel_export(request):
-    path = create_excel_export()
-    log_audit(request, "export", "Workbook", object_repr=path.name)
+    return _export_response(request, create_excel_export, "Workbook")
+
+
+@owner_required
+def csv_export(request):
+    return _export_response(request, create_csv_export, "CSV archive")
+
+
+@owner_required
+def json_export(request):
+    return _export_response(request, create_json_export, "JSON export")
+
+
+def _export_response(request, creator, object_type):
+    try:
+        path = creator()
+    except Exception:
+        messages.error(request, "تعذر تصدير البيانات. لم تُحذف أو تتغير أي بيانات.")
+        return redirect("backup:list")
+    log_audit(request, "export", object_type, object_repr=path.name)
     return FileResponse(path.open("rb"), as_attachment=True, filename=path.name)
