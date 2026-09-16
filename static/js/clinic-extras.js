@@ -23,8 +23,15 @@
       var scope = input.closest("form") || root;
       var ageField = scope.querySelector('[data-field="approx_age_value"]');
       var unitField = scope.querySelector('[data-field="approx_age_unit"]');
+      var ageOutput = scope.querySelector("[data-calculated-age]");
       function update() {
         hint.textContent = ageText(input.value);
+        if (ageOutput && input.value) ageOutput.value = ageText(input.value).replace("العمر المحسوب: ", "");
+        if (ageOutput && !input.value) {
+          var approximate = ageField && ageField.querySelector("input");
+          var unit = unitField && unitField.querySelector("select");
+          ageOutput.value = approximate && approximate.value ? approximate.value + " " + (unit && unit.options[unit.selectedIndex] ? unit.options[unit.selectedIndex].text : "") : "غير محدد";
+        }
         [ageField, unitField].forEach(function (field) {
           if (!field) return;
           field.hidden = Boolean(input.value);
@@ -33,6 +40,7 @@
         });
       }
       input.addEventListener("input", update); input.addEventListener("change", update); update();
+      [ageField, unitField].forEach(function(field){ if(!field)return; var control=field.querySelector("input,select"); if(control){control.addEventListener("input",update);control.addEventListener("change",update);} });
     });
   }
 
