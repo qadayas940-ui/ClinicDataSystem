@@ -20,7 +20,7 @@ from .services import create_patient, find_patient_candidates, normalize_arabic_
 
 
 @login_required
-def patient_list(request):
+def patient_list(request, source_only=None):
     query = request.GET.get("q", "").strip()
     phone_query = request.GET.get("phone", "").strip()
     age_query = request.GET.get("age", "").strip()
@@ -41,7 +41,9 @@ def patient_list(request):
         newest = date(today.year - age, today.month, min(today.day, 28))
         oldest = date(today.year - age - 1, today.month, min(today.day, 28))
         patients = patients.filter(Q(approx_age_value=age) | Q(date_of_birth__gt=oldest, date_of_birth__lte=newest))
-    if request.GET.get("source") in {"manual", "excel"}:
+    if source_only in {"manual", "excel"}:
+        patients = patients.filter(source_type=source_only)
+    elif request.GET.get("source") in {"manual", "excel"}:
         patients = patients.filter(source_type=request.GET["source"])
     if request.GET.get("department"):
         patients = patients.filter(visits__department_id=request.GET["department"])
@@ -68,7 +70,13 @@ def patient_list(request):
         "gender_choices": Patient.GENDER_CHOICES,
         "filters": request.GET,
         "change_token": f"{change_state['latest'].isoformat() if change_state['latest'] else ''}|{change_state['total']}",
+        "source_only": source_only,
     })
+
+
+@login_required
+def imported_patient_list(request):
+    return patient_list(request, source_only="excel")
 
 
 @login_required
@@ -120,6 +128,7 @@ def patient_match(request):
         "source": "مستورد" if item["patient"].source_type == "excel" else "مسجل يدوياً",
         "visit_url": reverse("visits:create_for_patient", args=[item["patient"].pk]),
         "patient_url": reverse("patients:list") + f"?patient={item['patient'].pk}",
+        "edit_url": reverse("patients:edit", args=[item["patient"].pk]),
     } for item in matches]})
 
 
