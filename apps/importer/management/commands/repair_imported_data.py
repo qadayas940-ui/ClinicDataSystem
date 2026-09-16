@@ -13,7 +13,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         batches = ImportBatch.objects.filter(import_type="patients")
         if batches.exists() and not batches.exclude(notes__contains=IMPORT_REPAIR_MARKER).exists() and not SourceRow.objects.filter(batch__in=batches, linked_patient__isnull=True).exclude(status="rejected").exists():
-            self.stdout.write("بيانات الاستيراد مصححة مسبقاً.")
+            self.stdout.write("Imported data was already repaired.")
             return
         repaired = 0
         for patient in Patient.objects.filter(source_type="excel").iterator(chunk_size=500):
@@ -59,4 +59,4 @@ class Command(BaseCommand):
             if IMPORT_REPAIR_MARKER not in batch.notes:
                 batch.notes = f"{batch.notes}\n{IMPORT_REPAIR_MARKER}".strip()
                 batch.save(update_fields=["notes", "updated_at"])
-        self.stdout.write(self.style.SUCCESS(f"تم تصحيح {repaired} عداد وربط {imported} صف مستورد."))
+        self.stdout.write(self.style.SUCCESS(f"Repaired {repaired} counters and linked {imported} imported rows."))
