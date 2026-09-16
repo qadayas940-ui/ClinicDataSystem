@@ -80,7 +80,7 @@ if (Test-Path $IsccPath) {
         Write-Warning "Inno Setup finished, but the installer file was not found in release."
     }
 } else {
-    Write-Warning "Inno Setup 6 was not found. Install it, then run this command from $RepoDir:"
+    Write-Warning ("Inno Setup 6 was not found. Install it, then run this command from {0}:" -f $RepoDir)
     Write-Host '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ClinicDataSystem.iss'
 }
 
