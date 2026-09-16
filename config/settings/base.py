@@ -235,8 +235,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # معلومات التطبيق
 # ---------------------------------------------------------------------------
 APP_NAME = "نظام إدارة بيانات ومرضى العيادة"
-APP_VERSION = "1.1.0"
-DB_SCHEMA_VERSION = "1"
+APP_VERSION = "1.2.0"
+DB_SCHEMA_VERSION = "2"
 FACILITY_NAME = config("FACILITY_NAME", default="عيادة الموصل الخيرية")
 UPDATE_MANIFEST_URL = config("UPDATE_MANIFEST_URL", default="")
 
