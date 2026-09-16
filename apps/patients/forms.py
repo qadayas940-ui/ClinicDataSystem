@@ -80,11 +80,6 @@ class PatientForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 2}),
     )
     notes = forms.CharField(label="الملاحظات", required=False, widget=forms.Textarea(attrs={"rows": 3}))
-    external_id = forms.CharField(
-        label="الرقم التعريفي الخارجي", max_length=120, required=False,
-        help_text="مستقل عن رقم المريض الداخلي ويُستخدم للسجلات المستوردة.",
-    )
-
     def __init__(self, *args, require_complete=False, department=None, language="ar", **kwargs):
         self.require_complete = require_complete
         super().__init__(*args, **kwargs)
@@ -115,6 +110,11 @@ class PatientForm(forms.Form):
             field.widget.attrs.setdefault("class", "form-control")
         self.fields["department"].widget.attrs["data-department-select"] = "1"
         self.fields["doctor_reference"].widget.attrs["data-doctor-select"] = "1"
+        for name in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference"):
+            self.fields[name].widget.attrs["data-searchable-combobox"] = "1"
+        self.fields["full_name"].widget.attrs["data-patient-match-name"] = "1"
+        self.fields["phone"].widget.attrs["data-patient-match-phone"] = "1"
+        self.fields["approx_age_value"].widget.attrs["data-patient-match-age"] = "1"
         if str(language).startswith("en"):
             labels = {
                 "full_name": "Full name", "gender": "Gender", "date_of_birth": "Date of birth",
@@ -122,7 +122,7 @@ class PatientForm(forms.Form):
                 "phone": "Phone number", "address": "Area / address", "department": "Department",
                 "doctor_reference": "Doctor", "organizer_reference": "Organizer", "visit_date": "Date",
                 "diagnosis_reference": "Status / diagnosis", "chief_complaint": "Reason / complaint",
-                "notes": "Notes", "external_id": "External ID",
+                "notes": "Notes",
             }
             for name, label in labels.items():
                 self.fields[name].label = label

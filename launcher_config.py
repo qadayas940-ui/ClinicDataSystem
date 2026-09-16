@@ -36,9 +36,9 @@ DESKTOP_CONFIG = _load_desktop_config()
 
 def _default_data_path():
     if platform.system() == "Windows":
-        d_drive_path = Path("D:/GOODJobe/mmmmm/Data")
-        if d_drive_path.parent.exists():
-            return str(d_drive_path)
+        root = os.environ.get("PROGRAMDATA") or os.environ.get("LOCALAPPDATA")
+        if root:
+            return str(Path(root) / "MosulCharityClinic" / "Data")
     return str(CONFIG_HOME / "data")
 
 
@@ -49,9 +49,12 @@ ALLOW_LAN = os.environ.get("CLINIC_ALLOW_LAN", str(DESKTOP_CONFIG.get("allow_lan
 HOST = "0.0.0.0" if ALLOW_LAN else "127.0.0.1"
 PORT = int(os.environ.get("CLINIC_PORT", DESKTOP_CONFIG.get("port", 8765)))
 THREADS = 4  # خفيف على ذاكرة 8GB
+DATABASE_URL = os.environ.get("DATABASE_URL") or DESKTOP_CONFIG.get("database_url", "")
+ALLOW_SQLITE_PRODUCTION = bool(DESKTOP_CONFIG.get("allow_sqlite_production", not DATABASE_URL))
+REMOTE_SERVER_URL = (os.environ.get("CLINIC_SERVER_URL") or DESKTOP_CONFIG.get("server_url", "")).strip().rstrip("/")
 
 # عنوان الواجهة
-APP_URL = f"http://127.0.0.1:{PORT}"
+APP_URL = REMOTE_SERVER_URL or f"http://127.0.0.1:{PORT}"
 
 # عنوان نافذة سطح المكتب
 WINDOW_TITLE = "نظام إدارة بيانات ومرضى العيادة"

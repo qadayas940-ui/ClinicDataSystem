@@ -2,7 +2,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
+from apps.core.models import Notification
 from apps.core.utils import log_audit, roles_required
 from apps.patients.models import Patient
 
@@ -30,6 +32,11 @@ def visit_create(request, patient_id=None):
             visit.organizer = request.user
         visit.save()
         log_audit(request, "create", "Visit", visit.pk, str(visit))
+        Notification.objects.create(
+            user=request.user, event_type="visit_created", title="تم تسجيل زيارة جديدة",
+            message=visit.patient.internal_code, object_type="Visit", object_id=str(visit.pk),
+            target_url=reverse("patients:list") + f"?patient={visit.patient_id}",
+        )
         messages.success(request, "تم تسجيل الزيارة وربطها بملف المريض.")
         return redirect("patients:detail", pk=visit.patient_id)
-    return render(request, "shared/form.html", {"form": form, "title": "تسجيل زيارة", "submit_label": "حفظ الزيارة"})
+    return render(request, "shared/form.html", {"form": form, "patient": patient, "title": "تسجيل زيارة", "submit_label": "حفظ الزيارة"})

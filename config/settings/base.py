@@ -8,6 +8,7 @@
 import os
 import platform
 import secrets
+from urllib.parse import unquote, urlparse
 from pathlib import Path
 
 from decouple import Config, RepositoryEnv
@@ -44,11 +45,11 @@ DATA_PATH = Path(
 ).expanduser().resolve()
 DATABASE_DIR = DATA_PATH / "database"
 UPLOADS_DIR = DATA_PATH / "uploads"
-LICENSE_DIR = DATA_PATH / "license"
+SECRETS_DIR = DATA_PATH / "secrets"
 LOGS_DIR = DATA_PATH / "logs"
 
 # التأكد من وجود المجلدات
-for _d in (DATABASE_DIR, UPLOADS_DIR, LICENSE_DIR, LOGS_DIR):
+for _d in (DATABASE_DIR, UPLOADS_DIR, SECRETS_DIR, LOGS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
@@ -107,7 +108,6 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # وسيط تسجيل العمليات المهمة (بدون بيانات حساسة)
     "apps.core.middleware.AuditLogMiddleware",
-    "apps.core.middleware.TrialReadOnlyMiddleware",
     # وسيط إجبار تغيير كلمة المرور المؤقتة
     "apps.accounts.middleware.ForcePasswordChangeMiddleware",
 ]
@@ -135,18 +135,33 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 # ---------------------------------------------------------------------------
-# قاعدة البيانات (SQLite افتراضياً، قابلة للانتقال لـ PostgreSQL)
+# قاعدة البيانات: PostgreSQL للإنتاج، وSQLite فقط للتطوير/الاختبارات المحلية.
 # ---------------------------------------------------------------------------
-DATABASES = {
-    "default": {
+def _database_config():
+    database_url = config("DATABASE_URL", default="").strip()
+    if database_url:
+        parsed = urlparse(database_url)
+        if parsed.scheme not in {"postgres", "postgresql"}:
+            raise ValueError("DATABASE_URL must use postgresql:// in production.")
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": unquote(parsed.path.lstrip("/")),
+            "USER": unquote(parsed.username or ""),
+            "PASSWORD": unquote(parsed.password or ""),
+            "HOST": parsed.hostname or "localhost",
+            "PORT": parsed.port or 5432,
+            "CONN_MAX_AGE": config("DB_CONN_MAX_AGE", default=60, cast=int),
+            "CONN_HEALTH_CHECKS": True,
+            "OPTIONS": {"sslmode": config("DB_SSLMODE", default="prefer")},
+        }
+    return {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": str(DATABASE_DIR / "clinic.db"),
-        "OPTIONS": {
-            "timeout": 20,
-            "transaction_mode": "IMMEDIATE",
-        },
+        "OPTIONS": {"timeout": 20, "transaction_mode": "IMMEDIATE"},
     }
-}
+
+
+DATABASES = {"default": _database_config()}
 
 # ---------------------------------------------------------------------------
 # نموذج المستخدم المخصص
@@ -223,15 +238,7 @@ APP_NAME = "نظام إدارة بيانات ومرضى العيادة"
 APP_VERSION = "1.1.0"
 DB_SCHEMA_VERSION = "1"
 FACILITY_NAME = config("FACILITY_NAME", default="عيادة الموصل الخيرية")
-DEFAULT_TRIAL_DAYS = config("DEFAULT_TRIAL_DAYS", default=30, cast=int)
 UPDATE_MANIFEST_URL = config("UPDATE_MANIFEST_URL", default="")
-CLINIC_READ_ONLY_EXEMPT_PATHS = (
-    "/accounts/login/",
-    "/accounts/logout/",
-    "/accounts/change-password/",
-    "/backup/",
-    "/api/health/",
-)
 
 # ---------------------------------------------------------------------------
 # السجلات (Logging) — لا تُسجَّل بيانات حساسة

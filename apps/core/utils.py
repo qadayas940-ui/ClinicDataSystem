@@ -7,7 +7,7 @@ logger = logging.getLogger("clinic")
 
 # حقول حساسة يجب عدم تسجيلها أبداً
 SENSITIVE_FIELDS = {"password", "password1", "password2", "old_password",
-                    "new_password1", "new_password2", "national_id", "license_key",
+                    "new_password1", "new_password2", "national_id",
                     "csrfmiddlewaretoken"}
 
 

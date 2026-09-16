@@ -44,7 +44,12 @@ HEADER_ALIASES = {
     "diagnosis": {"التشخيص", "المرض"},
     "external_id": {"المعرف الخارجي", "الرقم التعريفي الخارجي", "external id", "external_id"},
 }
-GENDERS = {"ذكر": "male", "ذ": "male", "male": "male", "m": "male", "انثى": "female", "أنثى": "female", "ا": "female", "female": "female", "f": "female"}
+GENDERS = {
+    "ذكر": "male", "رجل": "male", "ذكور": "male", "ذ": "male", "male": "male", "man": "male", "m": "male",
+    "انثى": "female", "أنثى": "female", "امراه": "female", "امرأة": "female", "نساء": "female",
+    "ا": "female", "female": "female", "woman": "female", "f": "female",
+    "غير محدد": "unknown", "غير معروف": "unknown", "unknown": "unknown", "u": "unknown",
+}
 SHEET_PROFILES = {
     "مراجعه المرضي": [
         ("ت", "sequence"), ("الاسم", "name"), ("الجنس", "gender"), ("العمر", "age"),
@@ -455,6 +460,26 @@ def _date(value):
     return parse_date(text[:10]) if text else None
 
 
+def _match_existing_patient(name, phone, birth_date, gender, address):
+    """مطابقة محافظة: الهاتف أولاً، ثم مجموعة متطابقة بخصائص مستقرة؛ لا تدمج الغامض."""
+    from apps.patients.models import Patient
+
+    if phone:
+        phone_matches = Patient.objects.filter(contacts__value=phone).distinct()
+        if phone_matches.count() == 1:
+            return phone_matches.first()
+    candidates = Patient.objects.filter(names__full_name__iexact=name).distinct()
+    if birth_date:
+        candidates = candidates.filter(date_of_birth=birth_date)
+    if gender and gender != "unknown":
+        candidates = candidates.filter(gender=gender)
+    if address:
+        address_matches = candidates.filter(addresses__text__iexact=address).distinct()
+        if address_matches.count() == 1:
+            return address_matches.first()
+    return candidates.first() if candidates.count() == 1 else None
+
+
 @transaction.atomic
 def import_batch_records(batch, user, source_row=None):
     """ينشئ السجلات القابلة للاستيراد دون دمج أو حذف، ويحفظ مصدر كل قيمة."""
@@ -476,7 +501,7 @@ def import_batch_records(batch, user, source_row=None):
         return 0
 
     rows = batch.rows.select_related("sheet").filter(linked_patient__isnull=True).filter(
-        models.Q(classification="ready") | models.Q(status="accepted")
+        models.Q(classification="ready") | models.Q(classification="repeat_visit") | models.Q(status="accepted")
     )
     if source_row is not None:
         rows = rows.filter(pk=source_row.pk)
@@ -497,15 +522,19 @@ def import_batch_records(batch, user, source_row=None):
         organizer = _reference("organizer", canonical.get("organizer"))
         diagnosis = _reference("diagnosis", canonical.get("status"))
         source_date = _date(canonical.get("date"))
+        birth_date = _date(canonical.get("birth_date"))
+        external_id = _text(canonical.get("external_id")) or (
+            f"XLS-{batch.file_hash[:10].upper()}-{row.sheet.sheet_index + 1}-{row.original_row_number}"
+        )
         payload = {
             "full_name": name,
             "gender": gender,
-            "date_of_birth": _date(canonical.get("birth_date")),
+            "date_of_birth": birth_date,
             "approx_age_value": age_value,
             "approx_age_unit": age_unit,
             "phone": phone,
             "address": _text(canonical.get("address")),
-            "external_id": _text(canonical.get("external_id") or canonical.get("sequence")),
+            "external_id": external_id,
             "source_type": "excel",
             "source_file": batch.original_filename,
             "source_sheet": row.sheet.sheet_name,
@@ -527,8 +556,29 @@ def import_batch_records(batch, user, source_row=None):
                 "chief_complaint": _text(canonical.get("status")),
                 "notes": _text(canonical.get("notes")),
                 "visit_date": source_date or timezone.localdate(),
+                "visit_type": "imported_historical",
             })
-        patient = create_patient(payload, user)
+        patient = _match_existing_patient(name, phone, birth_date, gender, payload["address"])
+        if row.classification == "repeat_visit" and patient is None and row.status != "accepted":
+            continue
+        if patient is None:
+            patient = create_patient(payload, user)
+        elif sheet_name == "مراجعه المرضي":
+            from apps.visits.models import Visit
+
+            Visit.objects.create(
+                patient=patient,
+                created_by=user,
+                visit_date=timezone.make_aware(datetime.combine(source_date or timezone.localdate(), datetime.min.time())),
+                visit_type="imported_historical",
+                department=payload.get("department"),
+                doctor_reference=doctor,
+                organizer_reference=organizer,
+                diagnosis=_text(canonical.get("status")),
+                chief_complaint=_text(canonical.get("status")),
+                notes=_text(canonical.get("notes")),
+                source="excel",
+            )
         if sheet_name == "المختبر":
             order = LabOrder.objects.create(patient=patient, order_date=timezone.now(), status="pending", notes=_text(canonical.get("notes")))
             if _text(canonical.get("test")):

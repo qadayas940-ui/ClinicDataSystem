@@ -13,9 +13,18 @@ class Visit(SoftDeleteModel):
         ("closed", "مغلقة"),
         ("cancelled", "ملغاة"),
     ]
+    VISIT_TYPE_CHOICES = [
+        ("clinic", "زيارة عيادة"),
+        ("follow_up", "مراجعة / متابعة"),
+        ("laboratory", "مختبر"),
+        ("referral", "إحالة"),
+        ("imported_historical", "زيارة تاريخية مستوردة"),
+        ("other", "أخرى"),
+    ]
 
     patient = models.ForeignKey("patients.Patient", verbose_name="المريض", on_delete=models.PROTECT, related_name="visits")
     visit_date = models.DateTimeField("تاريخ الزيارة")
+    visit_type = models.CharField("نوع الزيارة", max_length=30, choices=VISIT_TYPE_CHOICES, default="clinic", db_index=True)
     department = models.ForeignKey("core.Department", verbose_name="القسم", on_delete=models.SET_NULL, null=True, blank=True, related_name="visits")
     doctor = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="الطبيب", on_delete=models.SET_NULL, null=True, blank=True, related_name="doctor_visits")
     organizer = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="المنظّم", on_delete=models.SET_NULL, null=True, blank=True, related_name="organized_visits")
@@ -33,6 +42,7 @@ class Visit(SoftDeleteModel):
     chief_complaint = models.TextField("الشكوى الرئيسية", blank=True, default="")
     diagnosis = models.TextField("التشخيص", blank=True, default="")
     notes = models.TextField("ملاحظات", blank=True, default="")
+    source = models.CharField("المصدر", max_length=30, default="manual", db_index=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="أنشأها", on_delete=models.SET_NULL, null=True, blank=True, related_name="created_visits")
 
     class Meta:

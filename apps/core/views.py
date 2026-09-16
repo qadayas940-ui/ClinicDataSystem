@@ -4,20 +4,23 @@ import logging
 import os
 import re
 import socket
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db import connection
+from django.db import connection, models
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from .forms import DepartmentForm, ReferenceValueForm, ServerSettingsForm
-from .models import BackupHistory, Department, LicenseState, ReferenceValue, ServerSettings
+from .models import BackupHistory, Department, Notification, ReferenceValue, ServerSettings
 from .utils import log_audit, owner_required
 
 logger = logging.getLogger("clinic")
@@ -37,14 +40,41 @@ def notifications(request):
     items = request.user.notifications.all()[:100]
     if request.method == "POST":
         request.user.notifications.filter(read_at__isnull=True).update(read_at=timezone.now())
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"ok": True, "unread": 0})
         messages.success(request, "تم تعليم الإشعارات كمقروءة.")
         return redirect("core:notifications")
     return render(request, "core/notifications.html", {"notifications": items})
 
 
+@login_required
+def notification_open(request, pk):
+    item = get_object_or_404(Notification, pk=pk, user=request.user)
+    if item.read_at is None:
+        item.read_at = timezone.now()
+        item.save(update_fields=["read_at", "updated_at"])
+    target = item.target_url or reverse("core:notifications")
+    if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        target = reverse("core:notifications")
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"ok": True, "target_url": target, "unread": request.user.notifications.filter(read_at__isnull=True).count()})
+    return redirect(target)
+
+
+@login_required
+def notifications_status(request):
+    unread = request.user.notifications.filter(read_at__isnull=True).count()
+    latest = request.user.notifications.order_by("-created_at").values_list("created_at", flat=True).first()
+    return JsonResponse({"unread": unread, "latest": latest.isoformat() if latest else ""})
+
+
 def _get_db_size_mb():
-    """حساب حجم ملف قاعدة بيانات SQLite بالميغابايت."""
+    """حساب حجم قاعدة البيانات في SQLite أو PostgreSQL."""
     try:
+        if connection.vendor == "postgresql":
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_database_size(current_database())")
+                return round(cursor.fetchone()[0] / (1024 * 1024), 2)
         db_path = settings.DATABASES["default"]["NAME"]
         if db_path and db_path != ":memory:" and os.path.exists(db_path):
             return round(os.path.getsize(db_path) / (1024 * 1024), 2)
@@ -65,14 +95,6 @@ def _check_db():
         return False
 
 
-def _get_trial_days_remaining():
-    """أيام التجربة المتبقية من حالة الترخيص (إن وُجدت)."""
-    license_state = LicenseState.objects.first()
-    if license_state:
-        return license_state.trial_days_remaining
-    return getattr(settings, "DEFAULT_TRIAL_DAYS", 30)
-
-
 def _collect_health():
     """تجميع بيانات صحة النظام."""
     db_ok = _check_db()
@@ -85,7 +107,7 @@ def _collect_health():
         "version": getattr(settings, "APP_VERSION", "1.0.0"),
         "db_status": "connected" if db_ok else "disconnected",
         "db_size_mb": _get_db_size_mb(),
-        "trial_days_remaining": _get_trial_days_remaining(),
+        "database_engine": connection.vendor,
         "server_time": timezone.now().isoformat(),
         "users_count": users_count,
     }
@@ -95,7 +117,7 @@ def health_check(request):
     """
     نقطة فحص صحة النظام (GET /api/health/).
 
-    تُعيد JSON يوضّح حالة النظام وقاعدة البيانات والإصدار وأيام التجربة.
+    تُعيد JSON يوضّح حالة النظام وقاعدة البيانات والإصدار.
     """
     data = _collect_health()
     if not request.user.is_authenticated:
@@ -122,14 +144,32 @@ def dashboard(request):
     from apps.visits.models import Visit
 
     today = timezone.localdate()
+    period = request.GET.get("period", "today")
+    start = end = None
+    if period == "today": start = end = today
+    elif period == "week": start, end = today - timedelta(days=today.weekday()), today
+    elif period == "month": start, end = today.replace(day=1), today
+    elif period == "custom":
+        start = parse_date(request.GET.get("start", ""))
+        end = parse_date(request.GET.get("end", ""))
+    patient_qs = Patient.objects.all()
+    visit_qs = Visit.objects.all()
+    lab_qs = LabOrder.objects.all()
+    referral_qs = Referral.objects.all()
+    if start: patient_qs = patient_qs.filter(created_at__date__gte=start); visit_qs = visit_qs.filter(visit_date__date__gte=start); lab_qs = lab_qs.filter(order_date__date__gte=start); referral_qs = referral_qs.filter(referral_date__date__gte=start)
+    if end: patient_qs = patient_qs.filter(created_at__date__lte=end); visit_qs = visit_qs.filter(visit_date__date__lte=end); lab_qs = lab_qs.filter(order_date__date__lte=end); referral_qs = referral_qs.filter(referral_date__date__lte=end)
     context = {
         "health": health,
         "last_backup": last_backup,
         "server_running": True,
-        "patient_count": Patient.objects.count(),
-        "today_visits": Visit.objects.filter(visit_date__date=today).count(),
-        "pending_labs": LabOrder.objects.filter(status="pending").count(),
-        "pending_referrals": Referral.objects.filter(status="pending").count(),
+        "patient_count": patient_qs.count(),
+        "today_visits": visit_qs.count(),
+        "pending_labs": lab_qs.filter(status="pending").count(),
+        "pending_referrals": referral_qs.filter(status="pending").count(),
+        "department_count": Department.objects.filter(is_active=True).count(),
+        "doctor_count": ReferenceValue.objects.filter(category="doctor", is_active=True).count(),
+        "period": period, "start": start, "end": end,
+        "visits_by_department": visit_qs.values("department__name").annotate(total=models.Count("id")).order_by("-total")[:8],
     }
     return render(request, "core/dashboard.html", context)
 

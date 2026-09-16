@@ -64,6 +64,8 @@ def commit_batch(request, pk):
         imported = import_batch_records(batch, request.user)
         log_audit(request, "import", "ImportBatch", batch.pk, f"commit:{imported}")
         messages.success(request, f"تم إدراج {imported:,} سجل قابل للاستيراد. بقيت سجلات المراجعة والمانع دون تغيير.")
+        if imported:
+            return redirect(f"{reverse('patients:list')}?import_batch={batch.pk}")
     return redirect("importer:batch_detail", pk=batch.pk)
 
 
@@ -106,4 +108,15 @@ def row_detail(request, pk):
         log_audit(request, "update", "SourceRow", row.pk, f"review:{decision}")
         messages.success(request, "تم حفظ قرار المراجعة دون تغيير السجل الأصلي.")
         return redirect("importer:batch_detail", pk=row.batch_id)
-    return render(request, "importer/row_detail.html", {"row": row, "form": form})
+    sibling_ids = list(row.batch.rows.order_by("sheet_id", "original_row_number").values_list("pk", flat=True))
+    index = sibling_ids.index(row.pk)
+    canonical = row.raw_data.get("canonical", {})
+    from .services import GENDERS, normalize_arabic
+    return render(request, "importer/row_detail.html", {
+        "row": row,
+        "form": form,
+        "canonical": canonical,
+        "canonical_gender": GENDERS.get(normalize_arabic(canonical.get("gender")), "unknown"),
+        "previous_id": sibling_ids[index - 1] if index > 0 else None,
+        "next_id": sibling_ids[index + 1] if index + 1 < len(sibling_ids) else None,
+    })

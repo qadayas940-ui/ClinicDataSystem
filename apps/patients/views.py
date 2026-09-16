@@ -1,10 +1,11 @@
 from io import BytesIO
+from datetime import date
 
 import qrcode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Count, Max, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -15,18 +16,33 @@ from apps.core.utils import log_audit, roles_required
 
 from .forms import PatientForm
 from .models import Patient
-from .services import create_patient, update_patient
+from .services import create_patient, find_patient_candidates, normalize_arabic_text, update_patient
 
 
 @login_required
 def patient_list(request):
     query = request.GET.get("q", "").strip()
+    phone_query = request.GET.get("phone", "").strip()
+    age_query = request.GET.get("age", "").strip()
     patients = Patient.objects.select_related("primary_name").prefetch_related("contacts", "addresses", "visits__department", "visits__doctor_reference", "visits__organizer_reference")
     if query:
+        normalized_query = normalize_arabic_text(query)
         patients = patients.filter(
-            Q(internal_code__icontains=query) | Q(names__full_name__icontains=query)
+            Q(internal_code__icontains=query) | Q(external_id__icontains=query) | Q(names__full_name__icontains=query)
+            | Q(names__normalized_name__icontains=normalized_query)
             | Q(contacts__value__icontains=query) | Q(addresses__text__icontains=query)
         ).distinct()
+    if phone_query:
+        digits = "".join(character for character in phone_query if character.isdigit())
+        patients = patients.filter(contacts__value__icontains=digits[-10:]).distinct()
+    if age_query.isdigit():
+        age = min(int(age_query), 150)
+        today = date.today()
+        newest = date(today.year - age, today.month, min(today.day, 28))
+        oldest = date(today.year - age - 1, today.month, min(today.day, 28))
+        patients = patients.filter(Q(approx_age_value=age) | Q(date_of_birth__gt=oldest, date_of_birth__lte=newest))
+    if request.GET.get("source") in {"manual", "excel"}:
+        patients = patients.filter(source_type=request.GET["source"])
     if request.GET.get("department"):
         patients = patients.filter(visits__department_id=request.GET["department"])
     if request.GET.get("doctor"):
@@ -39,16 +55,72 @@ def patient_list(request):
         patients = patients.filter(visits__diagnosis__icontains=request.GET["status"])
     patients = patients.distinct()
     page = Paginator(patients, 30).get_page(request.GET.get("page"))
+    change_state = Patient.objects.aggregate(latest=Max("updated_at"), total=Count("id"))
     return render(request, "patients/list.html", {
         "page": page,
         "query": query,
+        "phone_query": phone_query,
+        "age_query": age_query,
         "departments": Department.objects.filter(is_active=True),
         "doctors": ReferenceValue.objects.filter(category="doctor", is_active=True),
         "organizers": ReferenceValue.objects.filter(category="organizer", is_active=True),
         "diagnoses": ReferenceValue.objects.filter(category="diagnosis", is_active=True)[:250],
         "gender_choices": Patient.GENDER_CHOICES,
         "filters": request.GET,
+        "change_token": f"{change_state['latest'].isoformat() if change_state['latest'] else ''}|{change_state['total']}",
     })
+
+
+@login_required
+def patient_changes(request):
+    state = Patient.objects.aggregate(latest=Max("updated_at"), total=Count("id"))
+    token = f"{state['latest'].isoformat() if state['latest'] else ''}|{state['total']}"
+    return JsonResponse({"changed": token != request.GET.get("token", ""), "token": token, "total": state["total"]})
+
+
+@login_required
+def patient_search(request):
+    """بحث حي من أول حرف، منفصل عن كشف التكرار أثناء التسجيل."""
+    query = request.GET.get("q", "").strip()
+    if not query:
+        return JsonResponse({"results": []})
+    normalized = normalize_arabic_text(query)
+    patients = Patient.objects.select_related("primary_name").prefetch_related("contacts").filter(
+        Q(internal_code__icontains=query)
+        | Q(external_id__icontains=query)
+        | Q(names__normalized_name__icontains=normalized)
+        | Q(contacts__value__icontains=query)
+    ).distinct()[:12]
+    return JsonResponse({"results": [{
+        "id": str(item.pk), "code": item.internal_code, "name": item.display_name,
+        "phone": item.contacts.filter(is_primary=True).values_list("value", flat=True).first() or "—",
+        "age": item.calculated_age, "gender": item.gender,
+        "url": reverse("patients:list") + f"?patient={item.pk}",
+    } for item in patients]})
+
+
+@login_required
+def patient_match(request):
+    name = request.GET.get("name", "").strip()
+    phone = "".join(character for character in request.GET.get("phone", "") if character.isdigit())
+    age = request.GET.get("age", "").strip()
+    matches = find_patient_candidates(
+        name=name, phone=phone, age=age,
+        birth_date=request.GET.get("birth_date") or None,
+        gender=request.GET.get("gender", ""), address=request.GET.get("address", ""),
+    )
+    return JsonResponse({"results": [{
+        "id": str(item["patient"].pk), "code": item["patient"].internal_code,
+        "name": item["patient"].display_name, "phone": item["phone"], "age": item["age"],
+        "gender": item["patient"].get_gender_display(),
+        "birth_date": item["patient"].date_of_birth.isoformat() if item["patient"].date_of_birth else "",
+        "address": item["address"] or "—", "score": item["score"], "reasons": item["reasons"],
+        "department": item["latest_visit"].department.name if item["latest_visit"] and item["latest_visit"].department else "—",
+        "last_visit": item["latest_visit"].visit_date.date().isoformat() if item["latest_visit"] else "",
+        "source": "مستورد" if item["patient"].source_type == "excel" else "مسجل يدوياً",
+        "visit_url": reverse("visits:create_for_patient", args=[item["patient"].pk]),
+        "patient_url": reverse("patients:list") + f"?patient={item['patient'].pk}",
+    } for item in matches]})
 
 
 def _patient_initial(patient):
@@ -125,6 +197,16 @@ def doctors_for_department(request):
 def patient_create(request):
     form = PatientForm(request.POST or None, require_complete=True, language=getattr(request, "LANGUAGE_CODE", "ar")).apply_widget_classes()
     if request.method == "POST" and form.is_valid():
+        candidates = find_patient_candidates(
+            name=form.cleaned_data["full_name"], phone=form.cleaned_data.get("phone", ""),
+            age=form.cleaned_data.get("approx_age_value"), birth_date=form.cleaned_data.get("date_of_birth"),
+            gender=form.cleaned_data.get("gender", ""), address=form.cleaned_data.get("address", ""),
+        )
+        if candidates and request.POST.get("duplicate_override") != "1":
+            return render(request, "shared/form.html", {
+                "form": form, "title": "تسجيل مريض جديد", "submit_label": "حفظ ملف المريض",
+                "duplicate_candidates": candidates,
+            })
         patient = create_patient(form.cleaned_data, request.user)
         log_audit(request, "create", "Patient", patient.pk, patient.internal_code)
         Notification.objects.create(user=request.user, event_type="patient_created", title="تم تسجيل مريض جديد", message=patient.internal_code, object_type="Patient", object_id=str(patient.pk), target_url=reverse("patients:list") + f"?patient={patient.pk}")

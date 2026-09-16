@@ -115,6 +115,7 @@ class PatientName(SoftDeleteModel):
 
     patient = models.ForeignKey(Patient, verbose_name="المريض", on_delete=models.CASCADE, related_name="names")
     full_name = models.CharField("الاسم الكامل", max_length=255, db_index=True)
+    normalized_name = models.CharField("الاسم المطبّع للبحث", max_length=255, blank=True, default="", db_index=True)
     is_primary = models.BooleanField("أساسي", default=False)
     source = models.CharField("المصدر", max_length=80, blank=True, default="")
 
@@ -125,6 +126,14 @@ class PatientName(SoftDeleteModel):
 
     def __str__(self):
         return self.full_name
+
+    def save(self, *args, **kwargs):
+        from .services import normalize_arabic_text
+
+        self.normalized_name = normalize_arabic_text(self.full_name)
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"normalized_name"}
+        super().save(*args, **kwargs)
 
 
 class PatientContact(SoftDeleteModel):

@@ -6,7 +6,6 @@ from .models import (
     AuditLog,
     BackupHistory,
     Department,
-    LicenseState,
     Notification,
     ReferenceValue,
     ServerSettings,
@@ -53,11 +52,6 @@ class AppVersionAdmin(admin.ModelAdmin):
 @admin.register(UpdateHistory)
 class UpdateHistoryAdmin(admin.ModelAdmin):
     list_display = ("from_version", "to_version", "update_type", "status", "started_at")
-
-
-@admin.register(LicenseState)
-class LicenseStateAdmin(admin.ModelAdmin):
-    list_display = ("mode", "is_trial", "is_expired", "expires_at")
 
 
 @admin.register(BackupHistory)

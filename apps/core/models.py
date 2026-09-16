@@ -146,6 +146,7 @@ class Notification(TimeStampedModel):
     EVENT_CHOICES = [
         ("patient_created", "تسجيل مريض"),
         ("patient_updated", "تعديل مريض"),
+        ("visit_created", "تسجيل زيارة"),
         ("import_completed", "اكتمال استيراد"),
         ("import_failed", "خطأ استيراد"),
         ("system", "حدث نظام"),
@@ -279,41 +280,6 @@ class UpdateHistory(models.Model):
 
     def __str__(self):
         return f"{self.from_version} → {self.to_version}"
-
-
-class LicenseState(models.Model):
-    """حالة ترخيص التطبيق (تجربة/مرخّص/قراءة فقط)."""
-
-    MODE_CHOICES = [
-        ("trial", "تجربة"),
-        ("licensed", "مرخّص"),
-        ("read_only", "قراءة فقط"),
-    ]
-
-    activation_date = models.DateTimeField("تاريخ التفعيل", default=timezone.now)
-    trial_days = models.PositiveIntegerField("أيام التجربة", default=30)
-    expires_at = models.DateTimeField("تاريخ الانتهاء", null=True, blank=True)
-    is_trial = models.BooleanField("نسخة تجريبية", default=True)
-    is_expired = models.BooleanField("منتهية", default=False)
-    # مفتاح الترخيص مخزّن مُجزّأً (hashed) وليس كنص واضح
-    license_key = models.CharField("مفتاح الترخيص (مجزّأ)", max_length=255, blank=True, default="")
-    mode = models.CharField("الوضع", max_length=20, choices=MODE_CHOICES, default="trial")
-    last_verified = models.DateTimeField("آخر تحقق", null=True, blank=True)
-
-    class Meta:
-        verbose_name = "حالة الترخيص"
-        verbose_name_plural = "حالة الترخيص"
-
-    def __str__(self):
-        return f"{self.get_mode_display()} - تنتهي: {self.expires_at}"
-
-    @property
-    def trial_days_remaining(self):
-        """عدد أيام التجربة المتبقية (0 إذا انتهت)."""
-        if not self.expires_at:
-            return 0
-        delta = self.expires_at - timezone.now()
-        return max(0, delta.days)
 
 
 class BackupHistory(models.Model):

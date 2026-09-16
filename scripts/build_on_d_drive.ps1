@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
-$BaseDir = "D:\GOODJobe\mmmmm"
-$RepoDir = Join-Path $BaseDir "ClinicDataSystem"
+$BaseDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$RepoDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $RepoUrl = "https://github.com/qadayas940-ui/ClinicDataSystem.git"
 $Branch = "codex/v1-complete"
 $PythonLauncher = "py"

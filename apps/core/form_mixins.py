@@ -8,8 +8,15 @@ class PatientCodeModelFormMixin:
 
     def __init__(self, *args, patient=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if "patient_code" not in self.fields:
+            self.fields["patient_code"] = forms.CharField(
+                label="الرقم التعريفي للمريض", max_length=40,
+                help_text="مثال: CLN26-0000000001",
+            )
         if patient:
+            self.resolved_patient = patient
             self.fields["patient_code"].initial = patient.internal_code
+            self.fields["patient_code"].widget = forms.HiddenInput()
         elif getattr(self.instance, "patient_id", None):
             self.fields["patient_code"].initial = self.instance.patient.internal_code
 
@@ -17,6 +24,8 @@ class PatientCodeModelFormMixin:
         from apps.patients.models import Patient
 
         code = self.cleaned_data["patient_code"].strip().upper()
+        if getattr(self, "resolved_patient", None) and self.resolved_patient.internal_code.upper() == code:
+            return code
         try:
             self.resolved_patient = Patient.objects.get(internal_code__iexact=code)
         except Patient.DoesNotExist as exc:

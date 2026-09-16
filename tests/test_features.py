@@ -1,6 +1,5 @@
 import hashlib
 import tempfile
-from datetime import timedelta
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
@@ -10,11 +9,12 @@ from django.utils import timezone
 from openpyxl import Workbook
 
 from apps.accounts.models import Role
-from apps.core.models import Department, LicenseState, ReferenceValue
+from apps.core.models import Department, Notification, ReferenceValue
 from apps.importer.services import analyze_workbook, import_batch_records
 from apps.patients.forms import PatientForm
 from apps.patients.models import Patient
-from apps.patients.services import create_patient
+from apps.patients.services import create_patient, find_patient_candidates
+from apps.visits.models import Visit
 
 User = get_user_model()
 
@@ -37,6 +37,25 @@ class PatientWorkflowTests(TestCase):
         response = self.client.get(reverse("patients:list"), {"q": "سارة"})
         self.assertContains(response, patient.internal_code)
 
+    def test_unified_search_and_match_find_manual_or_imported_patient(self):
+        manual = create_patient({"full_name": "سارة أحمد محمود علي", "gender": "female", "date_of_birth": None, "approx_age_value": 8, "approx_age_unit": "year", "phone": "07899189225", "address": "الزهور"}, self.user)
+        imported = create_patient({"full_name": "حيدر سالم كاظم حسن", "gender": "male", "date_of_birth": None, "approx_age_value": 32, "approx_age_unit": "year", "phone": "07701234567", "address": "الموصل"}, self.user)
+        imported.source_type = "excel"
+        imported.external_id = "XLS-TEST-1"
+        imported.save(update_fields=["source_type", "external_id", "updated_at"])
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("patients:list"), {"phone": "07701234567", "age": "32"})
+        self.assertContains(response, imported.internal_code)
+        self.assertNotContains(response, manual.internal_code)
+        self.assertContains(response, "السجل المستورد")
+
+        response = self.client.get(reverse("patients:match"), {"name": "حيدر سالم", "phone": "07701234567", "age": "32"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["results"]), 1)
+        self.assertEqual(response.json()["results"][0]["id"], str(imported.pk))
+        self.assertEqual(response.json()["results"][0]["source"], "مستورد")
+
     def test_doctor_choices_depend_on_department(self):
         women = Department.objects.create(name="نسائية", code="WOMEN")
         children = Department.objects.create(name="اطفال", code="CHILDREN")
@@ -54,19 +73,45 @@ class PatientWorkflowTests(TestCase):
         self.assertContains(response, "بطاقة المريض")
         self.assertContains(response, patient.internal_code)
 
-
-class TrialSafetyTests(TestCase):
-    def setUp(self):
-        role = Role.objects.create(name="المالك", code=Role.CODE_OWNER)
-        self.user = User.objects.create_user(username="owner", password="StrongPass123", role=role)
+    def test_live_search_from_first_character_name_phone_and_id(self):
+        patient = create_patient({"full_name": "محمد أحمد علي حسن", "gender": "male", "date_of_birth": None, "approx_age_value": 30, "approx_age_unit": "year", "phone": "07701234567", "address": "الموصل"}, self.user)
         self.client.force_login(self.user)
-        LicenseState.objects.create(activation_date=timezone.now() - timedelta(days=31), trial_days=30, expires_at=timezone.now() - timedelta(days=1), is_trial=True, mode="trial")
+        for query in ("م", "محمد", "701234", patient.internal_code):
+            response = self.client.get(reverse("patients:search"), {"q": query})
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(str(patient.pk), [item["id"] for item in response.json()["results"]])
 
-    def test_expired_trial_is_read_only_not_data_deletion(self):
-        response = self.client.post(reverse("patients:create"), {"full_name": "لن ينشأ", "gender": "unknown"})
+    def test_duplicate_candidates_are_safe_and_confirmed_patient_gets_visit(self):
+        existing = create_patient({"full_name": "محمد أحمد علي حسن", "gender": "male", "date_of_birth": None, "approx_age_value": 30, "approx_age_unit": "year", "phone": "07701234567", "address": "الموصل"}, self.user)
+        self.assertFalse(find_patient_candidates(name="شخص جديد تماماً", phone="07800000000"))
+        self.assertEqual(find_patient_candidates(name="محمد أحمد علي حسن", phone="07701234567")[0]["patient"], existing)
+        uncertain = find_patient_candidates(name="محمد أحمد علي حسن", phone="07899999999", gender="female", address="البصرة")
+        self.assertEqual(uncertain[0]["reasons"], ["الاسم مطابق"])
+        self.assertLess(uncertain[0]["score"], 50)  # مرشح بشري فقط، وليس دمجاً تلقائياً
+
+        self.client.force_login(self.user)
+        before = Patient.objects.count()
+        visit_url = reverse("visits:create_for_patient", args=[existing.pk])
+        response = self.client.post(visit_url, {
+            "patient_code": existing.internal_code,
+            "visit_date": "2026-09-16T10:00", "visit_type": "follow_up", "status": "open",
+            "chief_complaint": "متابعة", "diagnosis": "فحص دوري", "notes": "",
+        })
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(Patient.objects.count(), 0)
-        self.assertEqual(self.client.get(reverse("patients:list")).status_code, 200)
+        self.assertEqual(Patient.objects.count(), before)
+        self.assertTrue(Visit.objects.filter(patient=existing, chief_complaint="متابعة").exists())
+
+    def test_notifications_open_and_mark_all_read_without_deleting(self):
+        patient = create_patient({"full_name": "اختبار إشعار مريض علي", "gender": "male", "date_of_birth": None, "approx_age_value": 20, "approx_age_unit": "year", "phone": "07701111111", "address": "الموصل"}, self.user)
+        first = Notification.objects.create(user=self.user, title="الأول", target_url=reverse("patients:list") + f"?patient={patient.pk}")
+        Notification.objects.create(user=self.user, title="الثاني")
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("core:notification_open", args=[first.pk]), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(response.json()["unread"], 1)
+        first.refresh_from_db(); self.assertIsNotNone(first.read_at)
+        response = self.client.post(reverse("core:notifications"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(response.json()["unread"], 0)
+        self.assertEqual(Notification.objects.count(), 2)
 
 
 class ImportAnalysisTests(TestCase):
@@ -101,3 +146,11 @@ class ImportAnalysisTests(TestCase):
         self.assertIsNotNone(imported_patient)
         self.assertEqual(imported_patient.source_file, "patients.xlsx")
         self.assertIn("source_columns", imported_patient.additional_data)
+        self.assertEqual(Patient.objects.filter(names__full_name="علي حسن كامل").count(), 1)
+        self.assertEqual(Patient.objects.get(names__full_name="علي حسن كامل").visits.count(), 2)
+
+    def test_gender_variants_are_normalized_without_blocking(self):
+        from apps.importer.services import GENDERS, normalize_arabic
+
+        for raw, expected in (("رجل", "male"), ("Male", "male"), ("امرأة", "female"), ("F", "female")):
+            self.assertEqual(GENDERS[normalize_arabic(raw)], expected)

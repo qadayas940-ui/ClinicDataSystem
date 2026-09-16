@@ -15,6 +15,7 @@ hidden = (
     + collect_submodules("whitenoise")
     + collect_submodules("argon2")
     + collect_submodules("_argon2_cffi_bindings")
+    + collect_submodules("psycopg")
     + [
         "config.settings.production",
         "whitenoise.storage",

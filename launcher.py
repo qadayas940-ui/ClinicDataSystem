@@ -70,13 +70,17 @@ def _setup_environment():
         sys.stderr = StringIO()
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.production")
     data_path = Path(cfg.DATA_PATH).expanduser().resolve()
-    for child in ("database", "uploads", "license", "logs", "backups"):
+    for child in ("database", "uploads", "secrets", "logs", "backups"):
         (data_path / child).mkdir(parents=True, exist_ok=True)
-    secret_file = data_path / "license" / "secret.key"
+    secret_file = data_path / "secrets" / "secret.key"
     if not secret_file.exists():
         secret_file.write_text(secrets.token_urlsafe(64), encoding="utf-8")
     os.environ.setdefault("CLINIC_DATA_PATH", str(data_path))
     os.environ.setdefault("SECRET_KEY", secret_file.read_text(encoding="utf-8").strip())
+    if cfg.DATABASE_URL:
+        os.environ.setdefault("DATABASE_URL", cfg.DATABASE_URL)
+    if cfg.ALLOW_SQLITE_PRODUCTION:
+        os.environ.setdefault("ALLOW_SQLITE_PRODUCTION", "true")
     os.environ.setdefault("ALLOWED_HOSTS", "127.0.0.1,localhost,*" if cfg.ALLOW_LAN else "127.0.0.1,localhost")
     sys.path.insert(0, str(cfg.BASE_DIR))
 
@@ -89,8 +93,9 @@ def _run_migrations():
     django.setup()
     from django.conf import settings
 
-    db_path = Path(settings.DATABASES["default"]["NAME"])
-    if db_path.exists() and db_path.stat().st_size:
+    is_sqlite = settings.DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3"
+    db_path = Path(settings.DATABASES["default"]["NAME"]) if is_sqlite else None
+    if db_path and db_path.exists() and db_path.stat().st_size:
         destination = Path(settings.DATA_PATH) / "backups" / "pre_update"
         destination.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(datetime_timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -105,7 +110,7 @@ def _run_migrations():
 
     from apps.core.models import BackupHistory
 
-    if not BackupHistory.objects.filter(status="success", created_at__gte=timezone.now() - timedelta(days=1)).exists():
+    if is_sqlite and not BackupHistory.objects.filter(status="success", created_at__gte=timezone.now() - timedelta(days=1)).exists():
         call_command("create_backup", automatic=True, verbosity=0, stdout=command_output, stderr=command_output)
     output = command_output.getvalue().strip()
     if output:
@@ -146,9 +151,26 @@ def _wait_for_server(timeout=30):
     return False
 
 
+def _open_client(url):
+    """يفتح واجهة الخادم المركزي دون تشغيل قاعدة أو خادم محلي على جهاز الموظف."""
+    try:
+        import webview
+
+        webview.create_window(cfg.WINDOW_TITLE, url, width=cfg.WINDOW_WIDTH, height=cfg.WINDOW_HEIGHT)
+        webview.start()
+    except Exception as exc:  # noqa: BLE001
+        log_path = _write_startup_log(f"تعذر فتح نافذة العميل للخادم {url}: {exc}\n{traceback.format_exc()}")
+        _show_error_dialog(f"تعذر فتح نافذة البرنامج. سيتم فتح الرابط في المتصفح:\n{url}", log_path)
+        webbrowser.open(url)
+
+
 def main():
     """نقطة الدخول الرئيسية للمشغّل."""
     try:
+        if cfg.REMOTE_SERVER_URL:
+            _write_startup_log(f"Starting central-server client. url={cfg.REMOTE_SERVER_URL}")
+            _open_client(cfg.REMOTE_SERVER_URL)
+            return
         _setup_environment()
         print("جارٍ تجهيز قاعدة البيانات…")
         _run_migrations()
@@ -165,6 +187,11 @@ def main():
             sys.exit(1)
 
         print(f"الخادم يعمل على {cfg.APP_URL}")
+
+        if "--server" in sys.argv or os.environ.get("CLINIC_HEADLESS", "").lower() in {"1", "true", "yes"}:
+            _write_startup_log("ClinicDataSystem is running in headless LAN/server mode.")
+            server_thread.join()
+            return
 
         # فتح نافذة سطح المكتب
         try:

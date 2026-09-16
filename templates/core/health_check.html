@@ -20,7 +20,7 @@
                         {% if health.db_status == 'connected' %}متصلة{% else %}غير متصلة{% endif %}
                     </span></td></tr>
                 <tr><th>حجم قاعدة البيانات</th><td>{{ health.db_size_mb }} م.ب</td></tr>
-                <tr><th>أيام التجربة المتبقية</th><td>{{ health.trial_days_remaining }} يوم</td></tr>
+                <tr><th>محرك قاعدة البيانات</th><td>{{ health.database_engine }}</td></tr>
                 <tr><th>عدد المستخدمين</th><td>{{ health.users_count }}</td></tr>
                 <tr><th>وقت الخادم</th><td dir="ltr">{{ health.server_time }}</td></tr>
             </tbody>

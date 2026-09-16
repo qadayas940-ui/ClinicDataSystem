@@ -3,12 +3,10 @@
 - الأدوار الأربعة
 - الأقسام الافتراضية
 - إصدار البرنامج الحالي
-- حالة الترخيص التجريبي
 """
 import hashlib
 import json
 import re
-from datetime import timedelta
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
@@ -16,13 +14,12 @@ from django.utils import timezone
 
 
 class Command(BaseCommand):
-    help = "تهيئة البيانات الأولية للنظام (الأدوار، الأقسام، الإصدار، الترخيص)"
+    help = "تهيئة البيانات الأولية للنظام (الأدوار، الأقسام، الإصدار)"
 
     def handle(self, *args, **options):
         self._create_roles()
         self._create_departments()
         self._create_app_version()
-        self._create_license()
         self._create_server_settings()
         self._create_reference_catalog()
         self.stdout.write(self.style.SUCCESS("✅ تمت تهيئة البيانات الأولية بنجاح."))
@@ -62,25 +59,11 @@ class Command(BaseCommand):
                 "is_current": True,
                 "release_date": timezone.now().date(),
                 "db_schema_version": "1",
-                "notes": "النسخة التجريبية الأولى - المرحلة 1",
+                "notes": "إصدار عيادة الموصل الخيرية للإنتاج",
             },
         )
         if created:
             self.stdout.write(f"  + إصدار: {ver.version_number}")
-
-    def _create_license(self):
-        from apps.core.models import LicenseState
-        if LicenseState.objects.exists():
-            return
-        LicenseState.objects.create(
-            activation_date=timezone.now(),
-            trial_days=30,
-            expires_at=timezone.now() + timedelta(days=30),
-            is_trial=True,
-            is_expired=False,
-            mode="trial",
-        )
-        self.stdout.write("  + حالة الترخيص التجريبي (30 يوم)")
 
     def _create_server_settings(self):
         from apps.core.models import ServerSettings
