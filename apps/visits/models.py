@@ -19,6 +19,16 @@ class Visit(SoftDeleteModel):
     department = models.ForeignKey("core.Department", verbose_name="القسم", on_delete=models.SET_NULL, null=True, blank=True, related_name="visits")
     doctor = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="الطبيب", on_delete=models.SET_NULL, null=True, blank=True, related_name="doctor_visits")
     organizer = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="المنظّم", on_delete=models.SET_NULL, null=True, blank=True, related_name="organized_visits")
+    doctor_reference = models.ForeignKey(
+        "core.ReferenceValue", verbose_name="اسم الطبيب من السجل المرجعي",
+        on_delete=models.SET_NULL, null=True, blank=True, related_name="doctor_visits",
+        limit_choices_to={"category": "doctor"},
+    )
+    organizer_reference = models.ForeignKey(
+        "core.ReferenceValue", verbose_name="اسم المنظّم من السجل المرجعي",
+        on_delete=models.SET_NULL, null=True, blank=True, related_name="organized_reference_visits",
+        limit_choices_to={"category": "organizer"},
+    )
     status = models.CharField("الحالة", max_length=20, choices=STATUS_CHOICES, default="open")
     chief_complaint = models.TextField("الشكوى الرئيسية", blank=True, default="")
     diagnosis = models.TextField("التشخيص", blank=True, default="")

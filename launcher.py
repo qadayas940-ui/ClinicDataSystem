@@ -17,9 +17,9 @@ import threading
 import time
 import traceback
 import webbrowser
+from io import StringIO
 from datetime import datetime
 from datetime import timezone as datetime_timezone
-from io import StringIO
 from pathlib import Path
 from urllib.request import urlopen
 

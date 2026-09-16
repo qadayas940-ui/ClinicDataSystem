@@ -5,9 +5,12 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
+from django.urls import reverse
 
+from apps.core.models import Department, Notification, ReferenceValue
 from apps.core.utils import log_audit, roles_required
 
 from .forms import PatientForm
@@ -18,22 +21,113 @@ from .services import create_patient, update_patient
 @login_required
 def patient_list(request):
     query = request.GET.get("q", "").strip()
-    patients = Patient.objects.select_related("primary_name").prefetch_related("contacts")
+    patients = Patient.objects.select_related("primary_name").prefetch_related("contacts", "addresses", "visits__department", "visits__doctor_reference", "visits__organizer_reference")
     if query:
         patients = patients.filter(
             Q(internal_code__icontains=query) | Q(names__full_name__icontains=query)
             | Q(contacts__value__icontains=query) | Q(addresses__text__icontains=query)
         ).distinct()
+    if request.GET.get("department"):
+        patients = patients.filter(visits__department_id=request.GET["department"])
+    if request.GET.get("doctor"):
+        patients = patients.filter(visits__doctor_reference_id=request.GET["doctor"])
+    if request.GET.get("organizer"):
+        patients = patients.filter(visits__organizer_reference_id=request.GET["organizer"])
+    if request.GET.get("gender"):
+        patients = patients.filter(gender=request.GET["gender"])
+    if request.GET.get("status"):
+        patients = patients.filter(visits__diagnosis__icontains=request.GET["status"])
+    patients = patients.distinct()
     page = Paginator(patients, 30).get_page(request.GET.get("page"))
-    return render(request, "patients/list.html", {"page": page, "query": query})
+    return render(request, "patients/list.html", {
+        "page": page,
+        "query": query,
+        "departments": Department.objects.filter(is_active=True),
+        "doctors": ReferenceValue.objects.filter(category="doctor", is_active=True),
+        "organizers": ReferenceValue.objects.filter(category="organizer", is_active=True),
+        "diagnoses": ReferenceValue.objects.filter(category="diagnosis", is_active=True)[:250],
+        "gender_choices": Patient.GENDER_CHOICES,
+        "filters": request.GET,
+    })
+
+
+def _patient_initial(patient):
+    visit = patient.latest_visit
+    diagnosis = None
+    if visit and visit.diagnosis:
+        diagnosis = ReferenceValue.objects.filter(category="diagnosis", canonical_name=visit.diagnosis).first()
+    return {
+        "full_name": patient.display_name,
+        "gender": patient.gender,
+        "date_of_birth": patient.date_of_birth,
+        "approx_age_value": patient.approx_age_value,
+        "approx_age_unit": patient.approx_age_unit,
+        "phone": patient.contacts.filter(is_primary=True).values_list("value", flat=True).first() or "",
+        "address": patient.addresses.values_list("text", flat=True).first() or "",
+        "external_id": patient.external_id,
+        "department": visit.department_id if visit else None,
+        "doctor_reference": visit.doctor_reference_id if visit else None,
+        "organizer_reference": visit.organizer_reference_id if visit else None,
+        "visit_date": visit.visit_date.date() if visit else None,
+        "diagnosis_reference": diagnosis.pk if diagnosis else None,
+        "chief_complaint": visit.chief_complaint if visit else "",
+        "notes": visit.notes if visit else "",
+    }
+
+
+def _may_edit(user):
+    return bool(user.is_owner or user.is_organizer or user.is_auditor)
+
+
+@login_required
+def patient_drawer(request, pk):
+    patient = get_object_or_404(Patient.objects.select_related("primary_name").prefetch_related("contacts", "addresses", "visits"), pk=pk)
+    can_edit = _may_edit(request.user)
+    if request.method == "POST" and not can_edit:
+        return JsonResponse({"ok": False, "message": "لا تملك صلاحية تعديل ملف المريض."}, status=403)
+    form = PatientForm(
+        request.POST or None,
+        initial=None if request.method == "POST" else _patient_initial(patient),
+        require_complete=False,
+        department=(request.POST.get("department") if request.method == "POST" else (_patient_initial(patient).get("department"))),
+        language=getattr(request, "LANGUAGE_CODE", "ar"),
+    )
+    if request.method == "POST" and form.is_valid():
+        update_patient(patient, form.cleaned_data)
+        log_audit(request, "update", "Patient", patient.pk, patient.internal_code)
+        Notification.objects.create(
+            user=request.user, event_type="patient_updated", title="تم تحديث ملف مريض",
+            message=patient.internal_code, object_type="Patient", object_id=str(patient.pk),
+            target_url=reverse("patients:list") + f"?patient={patient.pk}",
+        )
+        return JsonResponse({
+            "ok": True,
+            "message": "تم حفظ التغييرات بنجاح.",
+            "patient": {
+                "name": patient.display_name,
+                "gender": patient.get_gender_display(),
+                "age": patient.calculated_age,
+                "phone": patient.contacts.filter(is_primary=True).values_list("value", flat=True).first() or "—",
+            },
+        })
+    html = render_to_string("patients/_drawer.html", {"patient": patient, "form": form, "can_edit": can_edit}, request=request)
+    return HttpResponse(html, status=422 if request.method == "POST" else 200)
+
+
+@login_required
+def doctors_for_department(request):
+    department_id = request.GET.get("department")
+    doctors = ReferenceValue.objects.filter(category="doctor", is_active=True, departments__pk=department_id).distinct() if department_id else ReferenceValue.objects.none()
+    return JsonResponse({"results": [{"id": item.pk, "text": item.canonical_name} for item in doctors]})
 
 
 @roles_required("organizer", "data_auditor")
 def patient_create(request):
-    form = PatientForm(request.POST or None).apply_widget_classes()
+    form = PatientForm(request.POST or None, require_complete=True, language=getattr(request, "LANGUAGE_CODE", "ar")).apply_widget_classes()
     if request.method == "POST" and form.is_valid():
         patient = create_patient(form.cleaned_data, request.user)
         log_audit(request, "create", "Patient", patient.pk, patient.internal_code)
+        Notification.objects.create(user=request.user, event_type="patient_created", title="تم تسجيل مريض جديد", message=patient.internal_code, object_type="Patient", object_id=str(patient.pk), target_url=reverse("patients:list") + f"?patient={patient.pk}")
         messages.success(request, f"تم إنشاء ملف المريض بالرقم {patient.internal_code}.")
         return redirect("patients:detail", pk=patient.pk)
     return render(request, "shared/form.html", {"form": form, "title": "تسجيل مريض جديد", "submit_label": "حفظ ملف المريض"})
@@ -49,14 +143,8 @@ def patient_detail(request, pk):
 @roles_required("organizer", "data_auditor")
 def patient_edit(request, pk):
     patient = get_object_or_404(Patient, pk=pk)
-    initial = {
-        "full_name": patient.display_name, "gender": patient.gender,
-        "date_of_birth": patient.date_of_birth, "approx_age_value": patient.approx_age_value,
-        "approx_age_unit": patient.approx_age_unit,
-        "phone": patient.contacts.filter(is_primary=True).values_list("value", flat=True).first() or "",
-        "address": patient.addresses.values_list("text", flat=True).first() or "",
-    }
-    form = PatientForm(request.POST or None, initial=initial).apply_widget_classes()
+    initial = _patient_initial(patient)
+    form = PatientForm(request.POST or None, initial=initial, require_complete=False, department=initial.get("department"), language=getattr(request, "LANGUAGE_CODE", "ar")).apply_widget_classes()
     if request.method == "POST" and form.is_valid():
         update_patient(patient, form.cleaned_data)
         log_audit(request, "update", "Patient", patient.pk, patient.internal_code)

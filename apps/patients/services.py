@@ -1,10 +1,31 @@
 import re
+from datetime import datetime, time
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
 from .models import Patient, PatientAddress, PatientContact, PatientName, PatientSequence
+
+
+def _visit_datetime(value):
+    value = value or timezone.localdate()
+    if isinstance(value, datetime):
+        return value if timezone.is_aware(value) else timezone.make_aware(value)
+    return timezone.make_aware(datetime.combine(value, time(hour=12)))
+
+
+def _visit_payload(cleaned_data):
+    diagnosis = cleaned_data.get("diagnosis_reference")
+    return {
+        "visit_date": _visit_datetime(cleaned_data.get("visit_date")),
+        "department": cleaned_data.get("department"),
+        "doctor_reference": cleaned_data.get("doctor_reference"),
+        "organizer_reference": cleaned_data.get("organizer_reference"),
+        "diagnosis": diagnosis.canonical_name if diagnosis else (cleaned_data.get("diagnosis") or ""),
+        "chief_complaint": cleaned_data.get("chief_complaint", ""),
+        "notes": cleaned_data.get("notes", ""),
+    }
 
 
 def normalize_phone(value):
@@ -41,6 +62,13 @@ def create_patient(cleaned_data, user):
         approx_age_unit=cleaned_data.get("approx_age_unit", ""),
         approx_age_recorded_date=timezone.localdate() if has_approx_age else None,
         is_approx_age=has_approx_age, created_by=user,
+        external_id=cleaned_data.get("external_id", ""),
+        source_type=cleaned_data.get("source_type", "manual"),
+        source_file=cleaned_data.get("source_file", ""),
+        source_sheet=cleaned_data.get("source_sheet", ""),
+        source_row=cleaned_data.get("source_row"),
+        imported_at=cleaned_data.get("imported_at"),
+        additional_data=cleaned_data.get("additional_data") or {},
     )
     name = PatientName.objects.create(patient=patient, full_name=cleaned_data["full_name"].strip(), is_primary=True, source="manual")
     patient.primary_name = name
@@ -51,6 +79,10 @@ def create_patient(cleaned_data, user):
     address = (cleaned_data.get("address") or "").strip()
     if address:
         PatientAddress.objects.create(patient=patient, text=address, address_type="سكن")
+    if any(cleaned_data.get(key) for key in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference", "diagnosis", "chief_complaint", "notes", "visit_date")):
+        from apps.visits.models import Visit
+
+        Visit.objects.create(patient=patient, created_by=user, **_visit_payload(cleaned_data))
     return patient
 
 
@@ -62,6 +94,7 @@ def update_patient(patient, cleaned_data):
     patient.approx_age_unit = cleaned_data.get("approx_age_unit", "")
     patient.approx_age_recorded_date = timezone.localdate() if cleaned_data.get("approx_age_value") is not None else None
     patient.is_approx_age = cleaned_data.get("approx_age_value") is not None
+    patient.external_id = cleaned_data.get("external_id", patient.external_id)
     patient.save()
     name = patient.primary_name or patient.names.filter(is_primary=True).first()
     if name:
@@ -85,4 +118,15 @@ def update_patient(patient, cleaned_data):
         current_address.save(update_fields=["text", "updated_at"])
     elif address:
         PatientAddress.objects.create(patient=patient, text=address, address_type="سكن")
+    if any(cleaned_data.get(key) for key in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference", "diagnosis", "chief_complaint", "notes", "visit_date")):
+        from apps.visits.models import Visit
+
+        visit = patient.visits.first()
+        payload = _visit_payload(cleaned_data)
+        if visit:
+            for key, value in payload.items():
+                setattr(visit, key, value)
+            visit.save()
+        else:
+            Visit.objects.create(patient=patient, created_by=patient.created_by, **payload)
     return patient

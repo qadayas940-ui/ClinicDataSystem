@@ -7,6 +7,7 @@ from .models import (
     BackupHistory,
     Department,
     LicenseState,
+    Notification,
     ReferenceValue,
     ServerSettings,
     UpdateHistory,
@@ -24,6 +25,13 @@ class ReferenceValueAdmin(admin.ModelAdmin):
     list_display = ("canonical_name", "category", "occurrence_count", "needs_review", "is_active")
     list_filter = ("category", "needs_review", "is_active")
     search_fields = ("canonical_name", "normalized_name")
+    filter_horizontal = ("departments",)
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "user", "event_type", "title", "read_at")
+    list_filter = ("event_type", "read_at")
 
 
 @admin.register(AuditLog)

@@ -1,5 +1,5 @@
 #define MyAppName "ClinicDataSystem"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "ClinicDataSystem"
 #define MyAppExeName "ClinicDataSystem.exe"
 
@@ -20,6 +20,7 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\static\img\clinic-logo.ico
 CloseApplications=yes
 RestartApplications=no
 

@@ -7,6 +7,7 @@
 """
 import os
 import platform
+import secrets
 from pathlib import Path
 
 from decouple import Config, RepositoryEnv
@@ -53,7 +54,7 @@ for _d in (DATABASE_DIR, UPLOADS_DIR, LICENSE_DIR, LOGS_DIR):
 # ---------------------------------------------------------------------------
 # الأمان
 # ---------------------------------------------------------------------------
-SECRET_KEY = config("SECRET_KEY", default="clinic-development-only-secret")
+SECRET_KEY = config("SECRET_KEY", default=secrets.token_urlsafe(64))
 
 DEBUG = config("DEBUG", default=False, cast=bool)
 
@@ -219,9 +220,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # معلومات التطبيق
 # ---------------------------------------------------------------------------
 APP_NAME = "نظام إدارة بيانات ومرضى العيادة"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 DB_SCHEMA_VERSION = "1"
-FACILITY_NAME = config("FACILITY_NAME", default="العيادة")
+FACILITY_NAME = config("FACILITY_NAME", default="عيادة الموصل الخيرية")
 DEFAULT_TRIAL_DAYS = config("DEFAULT_TRIAL_DAYS", default=30, cast=int)
 UPDATE_MANIFEST_URL = config("UPDATE_MANIFEST_URL", default="")
 CLINIC_READ_ONLY_EXEMPT_PATHS = (

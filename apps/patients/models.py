@@ -44,6 +44,13 @@ class Patient(SoftDeleteModel):
     approx_age_recorded_date = models.DateField("تاريخ تسجيل العمر التقريبي", null=True, blank=True)
     is_approx_age = models.BooleanField("عمر تقريبي", default=False)
     is_active = models.BooleanField("نشط", default=True)
+    external_id = models.CharField("المعرّف الخارجي", max_length=120, blank=True, default="", db_index=True)
+    source_type = models.CharField("نوع المصدر", max_length=40, blank=True, default="manual")
+    source_file = models.CharField("ملف المصدر", max_length=255, blank=True, default="")
+    source_sheet = models.CharField("ورقة المصدر", max_length=200, blank=True, default="")
+    source_row = models.PositiveIntegerField("صف المصدر", null=True, blank=True)
+    imported_at = models.DateTimeField("تاريخ الاستيراد", null=True, blank=True)
+    additional_data = models.JSONField("البيانات الإضافية", default=dict, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name="أنشأه",
@@ -79,6 +86,14 @@ class Patient(SoftDeleteModel):
             labels = {"year": "سنة", "month": "شهر", "day": "يوم"}
             return f"{self.approx_age_value} {labels.get(self.approx_age_unit, '')}".strip()
         return "غير محدد"
+
+    @property
+    def latest_visit(self):
+        return self.visits.select_related("department", "doctor_reference", "organizer_reference").first()
+
+    @property
+    def latest_source_row(self):
+        return self.source_rows.select_related("sheet").order_by("-batch_id", "-original_row_number").first()
 
 
 class PatientSequence(models.Model):

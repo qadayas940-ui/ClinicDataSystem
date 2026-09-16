@@ -7,8 +7,11 @@ from datetime import date, datetime
 from pathlib import Path
 
 from django.conf import settings
-from django.db import transaction
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from openpyxl import load_workbook
 
 from .models import (
@@ -39,6 +42,7 @@ HEADER_ALIASES = {
     "test": {"الفحص", "اسم الفحص", "التحليل"},
     "result": {"النتيجة", "نتيجة الفحص"},
     "diagnosis": {"التشخيص", "المرض"},
+    "external_id": {"المعرف الخارجي", "الرقم التعريفي الخارجي", "external id", "external_id"},
 }
 GENDERS = {"ذكر": "male", "ذ": "male", "male": "male", "m": "male", "انثى": "female", "أنثى": "female", "ا": "female", "female": "female", "f": "female"}
 SHEET_PROFILES = {
@@ -87,7 +91,7 @@ def _reference_identity(category, value):
     return display, normalized
 
 
-def _remember_reference(index, category, value, sheet_name):
+def _remember_reference(index, category, value, sheet_name, departments=None):
     display, normalized = _reference_identity(category, value)
     if not display or not normalized:
         return
@@ -96,11 +100,44 @@ def _remember_reference(index, category, value, sheet_name):
     item["aliases"].add(_text(value))
     item["source_sheets"].add(sheet_name)
     item["occurrence_count"] += 1
+    item["departments"].update(_text(name) for name in (departments or []) if _text(name))
+
+
+def _doctor_parts(value, row_department=""):
+    """يفصل اسم الطبيب عن تخصص مكتوب بعد / ولا يحوّل اسم القسم إلى طبيب."""
+    parts = re.split(r"\s*\+\s*", _text(value))
+    known_departments = {normalize_arabic(name) for name in (
+        "نسائية", "نسائية وتوليد", "اطفال", "أطفال", "بصريات", "عيون", "سونار",
+        "جراحة عظام", "عظام", "باطنية", "جراحة عامة", "جلدية", "مفاصل",
+        "طب اسرة", "طب أسرة", "قلبية", "اذن وحنجرة", "أذن وحنجرة",
+    )}
+    result = []
+    for part in parts:
+        chunks = [chunk.strip() for chunk in re.split(r"\s*/\s*", part, maxsplit=1)]
+        name = chunks[0]
+        departments = [_text(row_department)] if _text(row_department) else []
+        if len(chunks) > 1 and chunks[1]:
+            departments.append(chunks[1])
+        normalized_name = normalize_arabic(re.sub(r"^(?:د\s*[./-]?|دكتور(?:ة)?)\s*", "", name).strip())
+        if not normalized_name or normalized_name in known_departments:
+            continue
+        result.append((name, departments))
+    return result
 
 
 def _sync_reference_values(index):
     from apps.core.models import Department, ReferenceValue
 
+    department_lookup = {}
+    for (category, normalized), data in index.items():
+        if category != "department":
+            continue
+        code = "XLS-" + hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:8].upper()
+        department, _ = Department.all_objects.update_or_create(
+            code=code,
+            defaults={"name": data["canonical_name"], "department_type": "clinic", "is_active": True, "deleted_at": None},
+        )
+        department_lookup[normalized] = department
     for (category, normalized), data in index.items():
         aliases = sorted(data["aliases"])
         needs_review = len(aliases) > 1 or len(normalized) < 3
@@ -124,11 +161,15 @@ def _sync_reference_values(index):
             item.deleted_at = None
             item.save(update_fields=["canonical_name", "aliases", "source_sheets", "occurrence_count", "needs_review", "deleted_at", "updated_at"])
         if category == "department":
-            code = "XLS-" + hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:8].upper()
-            Department.all_objects.get_or_create(
-                code=code,
-                defaults={"name": data["canonical_name"], "department_type": "clinic"},
-            )
+            department_lookup.setdefault(normalized, Department.objects.filter(name=data["canonical_name"]).first())
+        if category == "doctor":
+            linked = []
+            for department_name in data["departments"]:
+                dep_normalized = normalize_arabic(department_name)
+                department = department_lookup.get(dep_normalized) or Department.objects.filter(name__iexact=department_name).first()
+                if department:
+                    linked.append(department)
+            item.departments.set(linked)
 
 
 def _canonical_header(value):
@@ -214,8 +255,8 @@ def _validate(canonical, raw):
     phone = re.sub(r"\D", "", _text(canonical.get("phone")))
     if not phone:
         issues.append(("phone", "info", "رقم الهاتف مفقود ويمكن استكماله لاحقاً", ""))
-    elif len(phone) < 10 or len(phone) > 15:
-        issues.append(("phone", "warning", "طول رقم الهاتف غير صالح", ""))
+    elif not (re.fullmatch(r"07[578]\d{8}", phone) or re.fullmatch(r"9647[578]\d{8}", phone)):
+        issues.append(("phone", "warning", "رقم الهاتف ليس عراقياً صحيحاً من 11 رقماً", "مثال: 07899189225"))
     for field, value in raw.items():
         if isinstance(value, str) and value.startswith("="):
             issues.append((field, "info", "القيمة الأصلية صيغة Excel؛ حُفظت مع قيمتها المحسوبة", ""))
@@ -224,12 +265,12 @@ def _validate(canonical, raw):
 
 
 @transaction.atomic
-def analyze_workbook(file_path, digest, original_filename, user):
-    duplicate = ImportBatch.objects.filter(file_hash=digest, status__in=["reviewing", "completed"]).first()
+def analyze_workbook(file_path, digest, original_filename, user, import_type="patients"):
+    duplicate = ImportBatch.objects.filter(file_hash=digest, import_type=import_type, status__in=["reviewing", "completed"]).first()
     if duplicate:
         return duplicate, False
     previous = ImportBatch.objects.filter(original_filename=original_filename).order_by("-created_at").first()
-    batch = ImportBatch.objects.create(file_hash=digest, original_filename=original_filename, file_size=file_path.stat().st_size, status="processing", imported_by=user, previous_batch=previous)
+    batch = ImportBatch.objects.create(file_hash=digest, original_filename=original_filename, file_size=file_path.stat().st_size, import_type=import_type, status="processing", imported_by=user, previous_batch=previous)
     ImportFile.objects.create(batch=batch, file_path=str(file_path), file_hash=digest)
     workbook = load_workbook(file_path, read_only=True, data_only=False, keep_links=False)
     value_workbook = load_workbook(file_path, read_only=True, data_only=True, keep_links=False)
@@ -243,7 +284,7 @@ def analyze_workbook(file_path, digest, original_filename, user):
             )
         }
     current_hashes, name_index = set(), {}
-    reference_index = defaultdict(lambda: {"aliases": set(), "source_sheets": set(), "occurrence_count": 0})
+    reference_index = defaultdict(lambda: {"aliases": set(), "source_sheets": set(), "occurrence_count": 0, "departments": set()})
     total = valid = flagged = 0
     try:
         for sheet_index, ws in enumerate(workbook.worksheets):
@@ -279,7 +320,14 @@ def analyze_workbook(file_path, digest, original_filename, user):
                 for field_name, value in canonical.items():
                     category = REFERENCE_FIELDS.get(field_name)
                     if normalize_arabic(ws.title) in {"احالات", "الاحالات"} and field_name == "doctor":
-                        category = "referral_destination"
+                        _remember_reference(reference_index, "referral_destination", value, ws.title)
+                        for doctor_name, departments in _doctor_parts(value):
+                            _remember_reference(reference_index, "doctor", doctor_name, ws.title, departments)
+                        continue
+                    if field_name == "doctor":
+                        for doctor_name, departments in _doctor_parts(value, canonical.get("department", "")):
+                            _remember_reference(reference_index, "doctor", doctor_name, ws.title, departments)
+                        continue
                     if category:
                         _remember_reference(reference_index, category, value, ws.title)
                 normalized_name = normalize_arabic(canonical.get("name"))
@@ -323,3 +371,186 @@ def analyze_workbook(file_path, digest, original_filename, user):
     finally:
         workbook.close()
         value_workbook.close()
+
+
+def remap_sheet(sheet, mapping):
+    """يعيد بناء الحقول المعروفة مع إبقاء كل عمود غير معروف داخل البيانات الإضافية."""
+    sheet.column_mapping = mapping
+    sheet.save(update_fields=["column_mapping"])
+    for row in sheet.rows.prefetch_related("issues"):
+        source = row.raw_data.get("source", {})
+        canonical = {}
+        additional = {}
+        for header, value in source.items():
+            target = mapping.get(header, "")
+            if target:
+                canonical[target] = value
+            else:
+                additional[header] = value
+        row.raw_data["canonical"] = canonical
+        row.raw_data["additional"] = additional
+        issues, reasons = _validate(canonical, source)
+        preserved = row.classification in {"duplicate", "repeat_visit"}
+        if not preserved:
+            row.classification = "blocking" if any(issue[1] == "blocking" for issue in issues) else ("review" if any(issue[1] == "warning" for issue in issues) else "ready")
+        row.flag_reasons = reasons
+        row.normalized_name = normalize_arabic(canonical.get("name"))
+        row.issues_count = len(issues)
+        row.save(update_fields=["raw_data", "classification", "flag_reasons", "normalized_name", "issues_count"])
+        row.issues.all().delete()
+        DataIssue.objects.bulk_create([
+            DataIssue(
+                source_row=row, field_name=field,
+                original_value=_text(canonical.get(field, source.get(field, ""))),
+                issue_type="error" if severity == "blocking" else severity,
+                severity=severity, description=description,
+                suggested_value=suggestion, is_auto_fixable=False,
+            )
+            for field, severity, description, suggestion in issues
+        ])
+    batch = sheet.batch
+    batch.total_rows = batch.rows.count()
+    batch.valid_rows = batch.rows.filter(classification="ready").count()
+    batch.issue_rows = batch.total_rows - batch.valid_rows
+    batch.save(update_fields=["total_rows", "valid_rows", "issue_rows"])
+
+
+def _reference(category, value):
+    if not _text(value):
+        return None
+    _, normalized = _reference_identity(category, value)
+    from apps.core.models import ReferenceValue
+
+    return ReferenceValue.objects.filter(category=category, normalized_name=normalized, is_active=True).first()
+
+
+def _department(value):
+    if not _text(value):
+        return None
+    from apps.core.models import Department, ReferenceValue
+
+    normalized = normalize_arabic(value)
+    ref = ReferenceValue.objects.filter(category="department", normalized_name=normalized).first()
+    if ref:
+        return Department.objects.filter(name=ref.canonical_name, is_active=True).first()
+    return Department.objects.filter(name__iexact=_text(value), is_active=True).first()
+
+
+def _age(value):
+    match = re.search(r"\d+(?:\.\d+)?", _text(value))
+    if not match:
+        return None, ""
+    number = max(0, min(150, int(float(match.group()))))
+    normalized = normalize_arabic(value)
+    unit = "month" if "شهر" in normalized else ("day" if "يوم" in normalized else "year")
+    return number, unit
+
+
+def _date(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = _text(value)
+    return parse_date(text[:10]) if text else None
+
+
+@transaction.atomic
+def import_batch_records(batch, user, source_row=None):
+    """ينشئ السجلات القابلة للاستيراد دون دمج أو حذف، ويحفظ مصدر كل قيمة."""
+    from apps.core.models import Notification
+    from apps.laboratory.models import LabOrder, LabOrderTest
+    from apps.patients.forms import normalize_iraqi_mobile
+    from apps.patients.services import create_patient
+    from apps.referrals.models import Referral
+
+    if batch.import_type != "patients" and source_row is None:
+        batch.status = "completed"
+        batch.completed_at = timezone.now()
+        batch.save(update_fields=["status", "completed_at"])
+        Notification.objects.create(
+            user=user, event_type="import_completed", title="اكتمل إدراج القاموس المرجعي",
+            message=f"تم تحديث بيانات {batch.get_import_type_display() if hasattr(batch, 'get_import_type_display') else batch.import_type} من {batch.original_filename}",
+            object_type="ImportBatch", object_id=str(batch.pk), target_url=reverse("importer:batch_detail", args=[batch.pk]),
+        )
+        return 0
+
+    rows = batch.rows.select_related("sheet").filter(linked_patient__isnull=True).filter(
+        models.Q(classification="ready") | models.Q(status="accepted")
+    )
+    if source_row is not None:
+        rows = rows.filter(pk=source_row.pk)
+    imported = 0
+    for row in rows.iterator(chunk_size=500):
+        canonical = row.raw_data.get("canonical", {})
+        name = _text(canonical.get("name"))
+        if not name:
+            continue
+        age_value, age_unit = _age(canonical.get("age"))
+        gender = GENDERS.get(normalize_arabic(canonical.get("gender")), "unknown")
+        try:
+            phone = normalize_iraqi_mobile(_text(canonical.get("phone")))
+        except ValidationError:
+            phone = ""
+        doctor_parts = _doctor_parts(canonical.get("doctor", ""), canonical.get("department", ""))
+        doctor = _reference("doctor", doctor_parts[0][0]) if doctor_parts else None
+        organizer = _reference("organizer", canonical.get("organizer"))
+        diagnosis = _reference("diagnosis", canonical.get("status"))
+        source_date = _date(canonical.get("date"))
+        payload = {
+            "full_name": name,
+            "gender": gender,
+            "date_of_birth": _date(canonical.get("birth_date")),
+            "approx_age_value": age_value,
+            "approx_age_unit": age_unit,
+            "phone": phone,
+            "address": _text(canonical.get("address")),
+            "external_id": _text(canonical.get("external_id") or canonical.get("sequence")),
+            "source_type": "excel",
+            "source_file": batch.original_filename,
+            "source_sheet": row.sheet.sheet_name,
+            "source_row": row.original_row_number,
+            "imported_at": timezone.now(),
+            "additional_data": {
+                "source_columns": row.raw_data.get("source", {}),
+                "unmapped_columns": row.raw_data.get("additional", {}),
+            },
+        }
+        sheet_name = normalize_arabic(row.sheet.sheet_name)
+        if sheet_name == "مراجعه المرضي":
+            payload.update({
+                "department": _department(canonical.get("department")),
+                "doctor_reference": doctor,
+                "organizer_reference": organizer,
+                "diagnosis_reference": diagnosis,
+                "diagnosis": _text(canonical.get("status")),
+                "chief_complaint": _text(canonical.get("status")),
+                "notes": _text(canonical.get("notes")),
+                "visit_date": source_date or timezone.localdate(),
+            })
+        patient = create_patient(payload, user)
+        if sheet_name == "المختبر":
+            order = LabOrder.objects.create(patient=patient, order_date=timezone.now(), status="pending", notes=_text(canonical.get("notes")))
+            if _text(canonical.get("test")):
+                LabOrderTest.objects.create(lab_order=order, test_name=_text(canonical.get("test")))
+        elif sheet_name in {"احالات", "الاحالات"}:
+            Referral.objects.create(
+                patient=patient, referring_doctor=None,
+                destination_name=_text(canonical.get("doctor")),
+                referral_date=timezone.now(), status="pending",
+            )
+        row.linked_patient = patient
+        row.imported_at = timezone.now()
+        row.status = "accepted"
+        row.save(update_fields=["linked_patient", "imported_at", "status"])
+        imported += 1
+    if source_row is None:
+        batch.status = "completed"
+        batch.completed_at = timezone.now()
+        batch.save(update_fields=["status", "completed_at"])
+    Notification.objects.create(
+        user=user, event_type="import_completed", title="اكتمل إدراج ملف Excel" if source_row is None else "تم إدراج سجل من Excel",
+        message=f"تم إدراج {imported} سجل من {batch.original_filename}",
+        object_type="ImportBatch", object_id=str(batch.pk), target_url=reverse("importer:batch_detail", args=[batch.pk]),
+    )
+    return imported

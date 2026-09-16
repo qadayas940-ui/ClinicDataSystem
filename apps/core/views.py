@@ -13,6 +13,7 @@ from django.core.paginator import Paginator
 from django.db import connection
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from .forms import DepartmentForm, ReferenceValueForm, ServerSettingsForm
@@ -21,6 +22,24 @@ from .utils import log_audit, owner_required
 
 logger = logging.getLogger("clinic")
 User = get_user_model()
+
+
+@login_required
+def set_language(request, language):
+    language = "en" if language == "en" else "ar"
+    response = redirect(request.GET.get("next") or request.META.get("HTTP_REFERER") or reverse("core:dashboard"))
+    response.set_cookie("django_language", language, max_age=365 * 24 * 60 * 60, samesite="Lax")
+    return response
+
+
+@login_required
+def notifications(request):
+    items = request.user.notifications.all()[:100]
+    if request.method == "POST":
+        request.user.notifications.filter(read_at__isnull=True).update(read_at=timezone.now())
+        messages.success(request, "تم تعليم الإشعارات كمقروءة.")
+        return redirect("core:notifications")
+    return render(request, "core/notifications.html", {"notifications": items})
 
 
 def _get_db_size_mb():
@@ -155,6 +174,7 @@ def reference_form(request, pk=None):
         item = form.save(commit=False)
         item.normalized_name = re.sub(r"\s+", " ", item.canonical_name.strip().lower())
         item.save()
+        form.save_m2m()
         messages.success(request, "تم حفظ القيمة المرجعية.")
         return redirect("core:reference_list")
     return render(request, "shared/form.html", {

@@ -1,7 +1,14 @@
 from django import forms
 
+from .models import ImportBatch
+
 
 class WorkbookUploadForm(forms.Form):
+    import_type = forms.ChoiceField(
+        label="نوع البيانات المراد إدراجها",
+        choices=ImportBatch.IMPORT_TYPE_CHOICES,
+        initial="patients",
+    )
     workbook = forms.FileField(label="ملف Excel")
 
     def clean_workbook(self):
@@ -14,7 +21,9 @@ class WorkbookUploadForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["workbook"].widget.attrs.update({"class": "form-control", "accept": ".xlsx,.xlsm"})
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")
+        self.fields["workbook"].widget.attrs.update({"accept": ".xlsx,.xlsm"})
 
 
 class ReviewForm(forms.Form):

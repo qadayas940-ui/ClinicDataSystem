@@ -40,7 +40,7 @@ class ReferenceValueForm(forms.ModelForm):
 
     class Meta:
         model = ReferenceValue
-        fields = ["category", "canonical_name", "needs_review", "is_active"]
+        fields = ["category", "canonical_name", "departments", "needs_review", "is_active"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -54,4 +54,5 @@ class ReferenceValueForm(forms.ModelForm):
         item.aliases = [line.strip() for line in self.cleaned_data.get("aliases_text", "").splitlines() if line.strip()]
         if commit:
             item.save()
+            self.save_m2m()
         return item

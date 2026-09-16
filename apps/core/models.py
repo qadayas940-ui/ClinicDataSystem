@@ -117,6 +117,13 @@ class ReferenceValue(SoftDeleteModel):
     occurrence_count = models.PositiveIntegerField("عدد مرات الظهور", default=0)
     needs_review = models.BooleanField("يحتاج مراجعة", default=False)
     is_active = models.BooleanField("نشط", default=True)
+    departments = models.ManyToManyField(
+        Department,
+        verbose_name="الأقسام المرتبطة",
+        blank=True,
+        related_name="reference_values",
+        help_text="تُستخدم خصوصاً لربط الطبيب بقسم أو أكثر كما ورد في ملفات المصدر.",
+    )
 
     class Meta:
         verbose_name = "قيمة مرجعية"
@@ -131,6 +138,46 @@ class ReferenceValue(SoftDeleteModel):
 
     def __str__(self):
         return self.canonical_name
+
+
+class Notification(TimeStampedModel):
+    """إشعار نظام قابل للقراءة والربط بكائن من دون تخزين بيانات طبية حساسة."""
+
+    EVENT_CHOICES = [
+        ("patient_created", "تسجيل مريض"),
+        ("patient_updated", "تعديل مريض"),
+        ("import_completed", "اكتمال استيراد"),
+        ("import_failed", "خطأ استيراد"),
+        ("system", "حدث نظام"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="المستخدم",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    event_type = models.CharField("نوع الحدث", max_length=40, choices=EVENT_CHOICES, default="system")
+    title = models.CharField("العنوان", max_length=160)
+    message = models.CharField("الرسالة", max_length=300, blank=True, default="")
+    object_type = models.CharField("نوع السجل المرتبط", max_length=80, blank=True, default="")
+    object_id = models.CharField("معرّف السجل المرتبط", max_length=100, blank=True, default="")
+    target_url = models.CharField("الرابط", max_length=300, blank=True, default="")
+    read_at = models.DateTimeField("قُرئ في", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "إشعار"
+        verbose_name_plural = "الإشعارات"
+        ordering = ["-created_at"]
+
+    @property
+    def is_read(self):
+        return self.read_at is not None
+
+    def __str__(self):
+        return self.title
 
 
 class AuditLog(models.Model):

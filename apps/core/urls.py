@@ -7,6 +7,8 @@ app_name = "core"
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("language/<str:language>/", views.set_language, name="set_language"),
+    path("notifications/", views.notifications, name="notifications"),
     path("api/health/", views.health_check, name="health_api"),
     path("health/", views.health_check_page, name="health_page"),
     path("departments/", views.department_list, name="departments"),

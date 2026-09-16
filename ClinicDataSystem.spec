@@ -52,5 +52,6 @@ exe = EXE(  # noqa: F821 - injected by PyInstaller
     strip=False,
     upx=True,
     console=False,
+    icon="static/img/clinic-logo.ico",
 )
 coll = COLLECT(a.binaries, a.datas, exe, name="ClinicDataSystem")  # noqa: F821 - injected by PyInstaller

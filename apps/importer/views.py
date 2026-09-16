@@ -6,8 +6,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from apps.core.utils import log_audit, roles_required
 
 from .forms import ReviewForm, WorkbookUploadForm
-from .models import ImportBatch, ReviewDecision, SourceRow
-from .services import analyze_workbook, archive_upload
+from .models import ImportBatch, ImportSheet, ReviewDecision, SourceRow
+from .services import HEADER_ALIASES, analyze_workbook, archive_upload, import_batch_records, remap_sheet
 
 
 @login_required
@@ -22,7 +22,7 @@ def upload_workbook(request):
     if request.method == "POST" and form.is_valid():
         uploaded = form.cleaned_data["workbook"]
         file_path, digest = archive_upload(uploaded)
-        batch, created = analyze_workbook(file_path, digest, uploaded.name, request.user)
+        batch, created = analyze_workbook(file_path, digest, uploaded.name, request.user, form.cleaned_data["import_type"])
         if created:
             log_audit(request, "import", "ImportBatch", batch.pk, uploaded.name)
             messages.success(request, f"اكتمل فحص {batch.total_rows:,} سجل. لم يُدمج أو يُحذف أي مريض تلقائياً.")
@@ -30,6 +30,56 @@ def upload_workbook(request):
             messages.warning(request, "هذه النسخة مطابقة تماماً لملف سبق تحليله؛ مُنع الاستيراد المكرر.")
         return redirect("importer:batch_detail", pk=batch.pk)
     return render(request, "importer/upload.html", {"form": form})
+
+
+@roles_required("data_auditor")
+def sheet_mapping(request, pk):
+    sheet = get_object_or_404(ImportSheet.objects.select_related("batch"), pk=pk)
+    sample = sheet.rows.order_by("original_row_number").first()
+    headers = list((sample.raw_data.get("source", {}) if sample else {}).keys())
+    fields = [("", "بيانات إضافية — لا تُفقد")] + [
+        (key, {
+            "sequence": "تسلسل", "name": "الاسم", "gender": "الجنس", "age": "العمر",
+            "birth_date": "تاريخ الميلاد", "phone": "الهاتف", "address": "العنوان",
+            "department": "القسم", "doctor": "الطبيب", "organizer": "المنظم",
+            "date": "التاريخ", "status": "الحالة / التشخيص", "notes": "الملاحظات",
+            "repeat_count": "عدد التكرار", "destination": "جهة الإحالة", "test": "الفحص",
+            "result": "النتيجة", "diagnosis": "التشخيص", "external_id": "المعرف الخارجي",
+        }.get(key, key))
+        for key in HEADER_ALIASES
+    ]
+    if request.method == "POST":
+        mapping = {header: request.POST.get(f"map_{index}", "") for index, header in enumerate(headers)}
+        remap_sheet(sheet, mapping)
+        messages.success(request, "تم حفظ خريطة الأعمدة وإعادة فحص الصفوف دون فقد الأعمدة الإضافية.")
+        return redirect("importer:batch_detail", pk=sheet.batch_id)
+    rows = [{"index": index, "header": header, "selected": sheet.column_mapping.get(header, "")} for index, header in enumerate(headers)]
+    return render(request, "importer/sheet_mapping.html", {"sheet": sheet, "rows": rows, "fields": fields})
+
+
+@roles_required("data_auditor")
+def commit_batch(request, pk):
+    batch = get_object_or_404(ImportBatch, pk=pk)
+    if request.method == "POST":
+        imported = import_batch_records(batch, request.user)
+        log_audit(request, "import", "ImportBatch", batch.pk, f"commit:{imported}")
+        messages.success(request, f"تم إدراج {imported:,} سجل قابل للاستيراد. بقيت سجلات المراجعة والمانع دون تغيير.")
+    return redirect("importer:batch_detail", pk=batch.pk)
+
+
+@roles_required("data_auditor")
+def commit_row(request, pk):
+    row = get_object_or_404(SourceRow.objects.select_related("batch", "sheet"), pk=pk)
+    if request.method == "POST":
+        if row.classification != "ready" and row.status != "accepted":
+            messages.warning(request, "راجع السجل واعتمده أولاً؛ لا يمكن إدراج سجل تحذير أو تكرار تلقائياً.")
+            return redirect("importer:row_detail", pk=row.pk)
+        imported = import_batch_records(row.batch, request.user, source_row=row)
+        if imported:
+            messages.success(request, "تمت إضافة السجل وربطه بمريض داخل النظام.")
+        else:
+            messages.warning(request, "السجل مضاف سابقاً أو غير صالح للإدراج.")
+    return redirect("importer:batch_detail", pk=row.batch_id)
 
 
 @login_required

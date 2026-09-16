@@ -7,6 +7,7 @@
 """
 import hashlib
 import json
+import re
 from datetime import timedelta
 from pathlib import Path
 
@@ -55,7 +56,7 @@ class Command(BaseCommand):
     def _create_app_version(self):
         from apps.core.models import AppVersion
         ver, created = AppVersion.objects.get_or_create(
-            version_number="1.0.0",
+            version_number="1.1.0",
             defaults={
                 "channel": "develop",
                 "is_current": True,
@@ -93,6 +94,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("لم يُعثر على قاموس Excel المضمّن."))
             return
         entries = json.loads(catalog_path.read_text(encoding="utf-8"))
+        department_by_name = {}
         for entry in entries:
             item, _ = ReferenceValue.all_objects.update_or_create(
                 category=entry["category"],
@@ -108,8 +110,25 @@ class Command(BaseCommand):
             )
             if entry["category"] == "department":
                 code = "XLS-" + hashlib.sha1(entry["normalized_name"].encode("utf-8")).hexdigest()[:8].upper()
-                Department.all_objects.update_or_create(
+                department, _ = Department.all_objects.update_or_create(
                     code=code,
                     defaults={"name": item.canonical_name, "department_type": "clinic", "is_active": True, "deleted_at": None},
                 )
+                department_by_name[item.canonical_name] = department
+        for entry in entries:
+            if entry["category"] != "doctor":
+                continue
+            item = ReferenceValue.objects.get(category="doctor", normalized_name=entry["normalized_name"])
+            item.departments.set([
+                department_by_name[name]
+                for name in entry.get("departments", [])
+                if name in department_by_name
+            ])
+        department_names = {name.strip() for name in department_by_name}
+        for item in ReferenceValue.objects.filter(category="doctor"):
+            bare = re.sub(r"^(?:د\s*[./-]?|دكتور(?:ة)?)\s*", "", item.canonical_name).strip()
+            if bare in department_names:
+                item.is_active = False
+                item.needs_review = True
+                item.save(update_fields=["is_active", "needs_review", "updated_at"])
         self.stdout.write(f"  + القيم المرجعية المستخرجة من Excel: {len(entries)}")

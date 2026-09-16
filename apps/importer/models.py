@@ -15,11 +15,18 @@ class ImportBatch(SoftDeleteModel):
         ("completed", "مكتملة"),
         ("failed", "فاشلة"),
     ]
+    IMPORT_TYPE_CHOICES = [
+        ("patients", "بيانات المرضى والزيارات"),
+        ("doctors", "الأطباء"),
+        ("departments", "الأقسام"),
+        ("organizers", "المنظمون"),
+        ("other", "بيانات أخرى"),
+    ]
 
     file_hash = models.CharField("بصمة الملف (SHA-256)", max_length=64, db_index=True)
     original_filename = models.CharField("اسم الملف الأصلي", max_length=255)
     file_size = models.BigIntegerField("حجم الملف", default=0)
-    import_type = models.CharField("نوع الاستيراد", max_length=80, blank=True, default="")
+    import_type = models.CharField("نوع الاستيراد", max_length=80, choices=IMPORT_TYPE_CHOICES, blank=True, default="patients")
     status = models.CharField("الحالة", max_length=20, choices=STATUS_CHOICES, default="pending")
     total_rows = models.PositiveIntegerField("إجمالي الصفوف", default=0)
     valid_rows = models.PositiveIntegerField("الصفوف الصالحة", default=0)
@@ -109,6 +116,7 @@ class SourceRow(models.Model):
         "patients.Patient", verbose_name="المريض المرتبط", on_delete=models.SET_NULL,
         null=True, blank=True, related_name="source_rows",
     )
+    imported_at = models.DateTimeField("تم إدراجه في", null=True, blank=True)
 
     class Meta:
         verbose_name = "صف مصدري"

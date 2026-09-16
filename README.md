@@ -50,7 +50,7 @@ pyinstaller --clean --noconfirm ClinicDataSystem.spec
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ClinicDataSystem.iss
 ```
 
-الناتج في `release/ClinicDataSystem-Setup-1.0.0.exe`.
+الناتج في `release/ClinicDataSystem-Setup-1.1.0.exe`.
 
 ## الاختبارات
 
@@ -61,7 +61,7 @@ python manage.py test
 python -m ruff check .
 ```
 
-آخر تحقق: 23 اختباراً آلياً ناجحاً، بالإضافة إلى فحص محلي كامل لملف العمل الخاص دون رفعه أو نشر إحصاءاته.
+آخر تحقق: 25 اختباراً آلياً ناجحاً، بالإضافة إلى فحص كامل للمصنف الفعلي واكتشاف 50,146 سجل بيانات فعلياً من دون نشر أسماء المرضى.
 
 ## الشبكة
 

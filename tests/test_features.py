@@ -10,8 +10,9 @@ from django.utils import timezone
 from openpyxl import Workbook
 
 from apps.accounts.models import Role
-from apps.core.models import LicenseState, ReferenceValue
-from apps.importer.services import analyze_workbook
+from apps.core.models import Department, LicenseState, ReferenceValue
+from apps.importer.services import analyze_workbook, import_batch_records
+from apps.patients.forms import PatientForm
 from apps.patients.models import Patient
 from apps.patients.services import create_patient
 
@@ -34,6 +35,23 @@ class PatientWorkflowTests(TestCase):
         patient = create_patient({"full_name": "سارة أحمد محمود علي", "gender": "female", "date_of_birth": None, "approx_age_value": 8, "approx_age_unit": "year", "phone": "07899189225", "address": "الزهور"}, self.user)
         self.client.force_login(self.user)
         response = self.client.get(reverse("patients:list"), {"q": "سارة"})
+        self.assertContains(response, patient.internal_code)
+
+    def test_doctor_choices_depend_on_department(self):
+        women = Department.objects.create(name="نسائية", code="WOMEN")
+        children = Department.objects.create(name="اطفال", code="CHILDREN")
+        doctor_women = ReferenceValue.objects.create(category="doctor", canonical_name="د. طبيبة نسائية", normalized_name="د طبيبه نسائيه")
+        doctor_children = ReferenceValue.objects.create(category="doctor", canonical_name="د. طبيب أطفال", normalized_name="د طبيب اطفال")
+        doctor_women.departments.add(women)
+        doctor_children.departments.add(children)
+        form = PatientForm(department=women)
+        self.assertEqual(list(form.fields["doctor_reference"].queryset), [doctor_women])
+
+    def test_patient_drawer_uses_same_screen_data(self):
+        patient = create_patient({"full_name": "سارة أحمد محمود علي", "gender": "female", "date_of_birth": None, "approx_age_value": 8, "approx_age_unit": "year", "phone": "07899189225", "address": "الزهور"}, self.user)
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("patients:drawer", args=[patient.pk]))
+        self.assertContains(response, "بطاقة المريض")
         self.assertContains(response, patient.internal_code)
 
 
@@ -76,3 +94,10 @@ class ImportAnalysisTests(TestCase):
         self.assertTrue(ReferenceValue.objects.filter(category="department", canonical_name="عام").exists())
         self.assertTrue(ReferenceValue.objects.filter(category="lab_test", canonical_name="CBC").exists())
         self.assertTrue(ReferenceValue.objects.filter(category="referral_destination").exists())
+        self.assertEqual(batch.rows.filter(raw_data__source__isnull=False).count(), 5)
+        imported = import_batch_records(batch, None)
+        self.assertGreaterEqual(imported, 1)
+        imported_patient = Patient.objects.filter(source_type="excel").first()
+        self.assertIsNotNone(imported_patient)
+        self.assertEqual(imported_patient.source_file, "patients.xlsx")
+        self.assertIn("source_columns", imported_patient.additional_data)
