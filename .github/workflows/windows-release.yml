@@ -10,7 +10,42 @@ permissions:
   contents: write
 
 jobs:
+  postgres-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: clinic_data
+          POSTGRES_USER: clinic_user
+          POSTGRES_PASSWORD: clinic_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clinic_user -d clinic_data"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      SECRET_KEY: github-actions-production-verification-secret
+      DATABASE_URL: postgresql://clinic_user:clinic_test_password@127.0.0.1:5432/clinic_data
+      ALLOWED_HOSTS: 127.0.0.1,localhost,testserver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Verify PostgreSQL migrations
+        run: python manage.py migrate --noinput
+      - name: Run PostgreSQL test suite
+        run: python manage.py test
+
   build:
+    needs: postgres-tests
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
