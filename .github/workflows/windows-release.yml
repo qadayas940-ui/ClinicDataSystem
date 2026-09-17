@@ -58,7 +58,10 @@ jobs:
       - name: Verify application
         env:
           DJANGO_SETTINGS_MODULE: config.settings.testing
-        run: python manage.py test
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py test
       - name: Build desktop bundle
         run: pyinstaller --clean --noconfirm ClinicDataSystem.spec
       - name: Build installer
@@ -66,7 +69,7 @@ jobs:
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClinicDataSystem-Windows
+          name: ClinicDataSystem-Windows-1.5.3
           path: release/*.exe
           if-no-files-found: error
       - name: Publish tagged release
