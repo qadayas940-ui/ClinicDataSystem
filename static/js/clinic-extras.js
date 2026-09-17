@@ -102,7 +102,13 @@
     });
   }
 
-  function csrfToken(){var match=document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);return match?decodeURIComponent(match[1]):"";}
+  function csrfToken(){
+    var input=document.querySelector('[name="csrfmiddlewaretoken"]');
+    if(input)return input.value;
+    var match=document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+    return match?decodeURIComponent(match[1]):"";
+  }
+
   function quickCreateReference(control,input,menu,name,textOnly){
     var url=document.body.dataset.referenceCreateUrl, category=control.dataset.referenceCategory;
     if(!url||!category||!name)return;
@@ -139,7 +145,7 @@
       var form=drawer.querySelector("[data-drawer-form]"); if(!form)return;
       form.addEventListener("submit",function(event){event.preventDefault();var submit=form.querySelector('[type="submit"]');if(submit)submit.disabled=true;fetch(form.action,{method:"POST",body:new FormData(form),headers:{"X-Requested-With":"XMLHttpRequest"}}).then(function(response){var type=response.headers.get("content-type")||"";if(type.indexOf("application/json")>=0)return response.json();return response.text().then(function(html){throw {html:html};});}).then(function(data){var row=screen.querySelector('[data-drawer-url="'+form.action+'"]');if(row&&data.patient){var name=row.querySelector("[data-row-name]");if(name)name.textContent=data.patient.name;}var message=drawer.querySelector("[data-drawer-message]");if(message){message.hidden=false;message.className="drawer-message success";message.textContent=data.message;}setTimeout(closeDrawer,700);}).catch(function(error){if(error.html){drawer.innerHTML=error.html;wireDrawer();}else{var message=drawer.querySelector("[data-drawer-message]");if(message){message.hidden=false;message.textContent="تعذر حفظ التغييرات. تحقق من الحقول وحاول مرة أخرى.";}}}).finally(function(){if(submit)submit.disabled=false;});});
     }
-    function openDrawer(url){drawer.hidden=false;drawer.innerHTML='<div class="drawer-loading">جارٍ فتح بطاقة المريض…</div>';screen.classList.add("drawer-open");fetch(url,{headers:{"X-Requested-With":"XMLHttpRequest"}}).then(function(r){return r.text();}).then(function(html){drawer.innerHTML=html;wireDrawer();}).catch(function(){drawer.innerHTML='<div class="alert alert-danger">تعذر فتح بطاقة المريض.</div>';});}
+    function openDrawer(url){document.dispatchEvent(new Event("patient:drawer-open"));drawer.hidden=false;drawer.innerHTML='<div class="drawer-loading">جارٍ فتح بطاقة المريض…</div>';screen.classList.add("drawer-open");fetch(url,{headers:{"X-Requested-With":"XMLHttpRequest"}}).then(function(r){return r.text();}).then(function(html){drawer.innerHTML=html;wireDrawer();}).catch(function(){drawer.innerHTML='<div class="alert alert-danger">تعذر فتح بطاقة المريض.</div>';});}
     screen.querySelectorAll("[data-patient-row]").forEach(function(row){row.addEventListener("dblclick",function(event){if(event.target.closest("a,button,input,select,textarea"))return;openDrawer(row.dataset.drawerUrl);});var button=row.querySelector("[data-open-drawer]");if(button)button.addEventListener("click",function(){openDrawer(row.dataset.drawerUrl);});});
     var initial=screen.dataset.initialPatient;if(initial){var row=screen.querySelector('[data-drawer-url*="'+initial+'"]');if(row)openDrawer(row.dataset.drawerUrl);}
   }
@@ -209,24 +215,31 @@
       box.className = "live-search-results";
       box.hidden = true;
       (form || input.parentElement).appendChild(box);
-      var timer = null;
+      var timer = null, requestNumber = 0;
+      function closeResults(){ window.clearTimeout(timer); requestNumber += 1; box.hidden = true; box.innerHTML = ""; }
       input.addEventListener("input", function(){
         window.clearTimeout(timer);
         var query = input.value.trim();
-        if (!query) { box.hidden = true; box.innerHTML = ""; return; }
+        if (!query) { closeResults(); return; }
+        var thisRequest = ++requestNumber;
         timer = window.setTimeout(function(){
           fetch(input.dataset.searchUrl + "?q=" + encodeURIComponent(query), {headers:{"X-Requested-With":"XMLHttpRequest"}})
             .then(function(response){ return response.json(); })
             .then(function(data){
+              if (thisRequest !== requestNumber || document.activeElement !== input) return;
               if (!data.results.length) { box.hidden = false; box.innerHTML = '<div class="live-search-empty">لا يوجد مريض مطابق</div>'; return; }
               box.hidden = false;
               box.innerHTML = data.results.map(function(item){
                 return '<a href="' + escapeHtml(item.url) + '"><span class="patient-avatar ' + escapeHtml(item.gender) + '">●</span><span><b>' + escapeHtml(item.name) + '</b><small>' + escapeHtml(item.code) + ' · ' + escapeHtml(item.phone) + ' · ' + escapeHtml(item.age) + '</small></span></a>';
               }).join("");
-            }).catch(function(){ box.hidden = true; });
+            }).catch(function(){ if (thisRequest === requestNumber) box.hidden = true; });
         }, 280);
       });
-      document.addEventListener("click", function(event){ if (!box.contains(event.target) && event.target !== input) box.hidden = true; });
+      input.addEventListener("blur", function(){ window.setTimeout(function(){ if(document.activeElement !== input && !box.contains(document.activeElement)) closeResults(); }, 0); });
+      input.addEventListener("keydown", function(event){ if(event.key === "Escape") closeResults(); });
+      box.addEventListener("click", function(event){ if(event.target.closest("a")) closeResults(); });
+      document.addEventListener("click", function(event){ if (!box.contains(event.target) && event.target !== input) closeResults(); });
+      document.addEventListener("patient:drawer-open", closeResults);
     });
   }
 
