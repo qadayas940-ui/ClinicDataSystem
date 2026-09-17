@@ -52,6 +52,17 @@ def _write_startup_log(message):
 def _show_error_dialog(message, log_path):
     if os.name != "nt":
         return
+    try:
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(
+            0,
+            f"{message}\n\nتم حفظ التفاصيل في:\n{log_path}",
+            "ClinicDataSystem - خطأ في التشغيل",
+            0x10,
+        )
+    except Exception:
+        return
 
 
 def _acquire_server_instance():
@@ -68,17 +79,6 @@ def _acquire_server_instance():
         return True
     _INSTANCE_MUTEX_HANDLE = handle
     return ctypes.windll.kernel32.GetLastError() != 183
-    try:
-        import ctypes
-
-        ctypes.windll.user32.MessageBoxW(
-            0,
-            f"{message}\n\nتم حفظ التفاصيل في:\n{log_path}",
-            "ClinicDataSystem - خطأ في التشغيل",
-            0x10,
-        )
-    except Exception:
-        return
 
 
 def _setup_environment():
@@ -103,7 +103,9 @@ def _setup_environment():
         os.environ.setdefault("ALLOW_SQLITE_PRODUCTION", "true")
     os.environ.setdefault("CLINIC_ALLOW_LAN", "true" if cfg.ALLOW_LAN else "false")
     os.environ.setdefault("CLINIC_PORT", str(cfg.PORT))
-    os.environ.setdefault("ALLOWED_HOSTS", "127.0.0.1,localhost,*" if cfg.ALLOW_LAN else "127.0.0.1,localhost")
+    # افرض القيمة الصحيحة على نسخة سطح المكتب؛ قد تبقى قيمة قديمة في بيئة
+    # Windows، وsetdefault كان يتركها فيسبب 400 للأجهزة الأخرى.
+    os.environ["ALLOWED_HOSTS"] = "*" if cfg.ALLOW_LAN else "127.0.0.1,localhost"
     sys.path.insert(0, str(cfg.BASE_DIR))
 
 

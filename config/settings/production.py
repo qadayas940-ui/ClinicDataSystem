@@ -23,6 +23,11 @@ ALLOWED_HOSTS = config(
     cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
 )
 
+# عند تشغيل خادم العيادة على الشبكة المحلية تكون عناوين الأجهزة متغيرة.
+# نترك التحقق من أنها loopback/private للوسيط PrivateNetworkHostMiddleware.
+if config("CLINIC_ALLOW_LAN", default=False, cast=bool):
+    ALLOWED_HOSTS = ["*"]
+
 # تقوية الأمان
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True

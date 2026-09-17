@@ -9,6 +9,7 @@ import logging
 
 from django.conf import settings
 from django.http import HttpResponseBadRequest
+from django.http.request import split_domain_port
 
 from .utils import get_client_ip
 
@@ -26,7 +27,13 @@ class PrivateNetworkHostMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        host = request.get_host().split(":", 1)[0].strip("[]").lower()
+        # لا نستخدم request.get_host() هنا؛ لأنه يتحقق من ALLOWED_HOSTS قبل
+        # أن نحصل على فرصة السماح بعناوين LAN الخاصة، فينتج Bad Request 400.
+        raw_host = request.META.get("HTTP_HOST") or request.META.get("SERVER_NAME", "")
+        host, _port = split_domain_port(raw_host.lower())
+        host = host.strip("[]").rstrip(".")
+        if not host:
+            return HttpResponseBadRequest("عنوان المضيف غير صالح.")
         configured_hosts = {item.lower() for item in settings.ALLOWED_HOSTS if item != "*"}
         if settings.DEBUG or host in {"localhost", "testserver"} or host in configured_hosts:
             return self.get_response(request)
