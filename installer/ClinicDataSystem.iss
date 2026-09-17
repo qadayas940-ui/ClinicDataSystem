@@ -1,5 +1,5 @@
 #define MyAppName "ClinicDataSystem"
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.4.0"
 #define MyAppPublisher "ClinicDataSystem"
 #define MyAppExeName "ClinicDataSystem.exe"
 
@@ -40,11 +40,12 @@ Name: "desktopicon"; Description: "إنشاء اختصار على سطح الم�
 Name: "localserver"; Description: "تشغيل خادم العيادة المحلي تلقائياً عند تسجيل الدخول"; GroupDescription: "وضع الخادم المحلي:"
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "تشغيل ClinicDataSystem"; Flags: nowait postinstall skipifsilent
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Mosul Charity Clinic Server"""; Flags: runhidden; Tasks: localserver; Check: ShouldInstallLocalServer
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Mosul Charity Clinic Server"" dir=in action=allow program=""{app}\{#MyAppExeName}"" protocol=TCP localport=8765 enable=yes profile=any"; Flags: runhidden; Tasks: localserver; Check: ShouldInstallLocalServer
 Filename: "{sys}\schtasks.exe"; Parameters: "/Create /F /SC ONLOGON /TN ""MosulCharityClinicServer"" /TR """"""{app}\{#MyAppExeName}"""" --server"""; Flags: runhidden; Tasks: localserver; Check: ShouldInstallLocalServer
 Filename: "{sys}\schtasks.exe"; Parameters: "/Run /TN ""MosulCharityClinicServer"""; Flags: runhidden; Tasks: localserver; Check: ShouldInstallLocalServer
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--client"; Description: "تشغيل ClinicDataSystem"; Flags: nowait postinstall skipifsilent; Tasks: localserver; Check: ShouldInstallLocalServer
+Filename: "{app}\{#MyAppExeName}"; Description: "تشغيل ClinicDataSystem"; Flags: nowait postinstall skipifsilent; Check: not ShouldInstallLocalServer
 
 [UninstallRun]
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /F /TN ""MosulCharityClinicServer"""; Flags: runhidden; RunOnceId: "RemoveClinicServerTask"

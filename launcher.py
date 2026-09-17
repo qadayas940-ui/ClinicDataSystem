@@ -10,6 +10,7 @@
 يعالج الأخطاء ويعرضها للمستخدم برسائل عربية مفهومة.
 """
 import os
+import hashlib
 import secrets
 import shutil
 import sys
@@ -24,6 +25,9 @@ from pathlib import Path
 from urllib.request import urlopen
 
 import launcher_config as cfg
+
+
+_INSTANCE_MUTEX_HANDLE = None
 
 
 def _startup_log_path():
@@ -48,6 +52,22 @@ def _write_startup_log(message):
 def _show_error_dialog(message, log_path):
     if os.name != "nt":
         return
+
+
+def _acquire_server_instance():
+    """Ensure only one local process can prepare SQLite and host the server."""
+    global _INSTANCE_MUTEX_HANDLE
+    if os.name != "nt":
+        return True
+    import ctypes
+
+    identity = f"{Path(cfg.DATA_PATH).expanduser().resolve()}|{cfg.PORT}".lower()
+    suffix = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
+    handle = ctypes.windll.kernel32.CreateMutexW(None, False, f"Local\\ClinicDataSystem-{suffix}")
+    if not handle:
+        return True
+    _INSTANCE_MUTEX_HANDLE = handle
+    return ctypes.windll.kernel32.GetLastError() != 183
     try:
         import ctypes
 
@@ -175,6 +195,25 @@ def main():
             _open_client(cfg.REMOTE_SERVER_URL)
             return
         _setup_environment()
+
+        # The installer starts the persistent scheduled server first, then opens
+        # this lightweight client.  It must never touch SQLite while the server
+        # is applying migrations or repairing imported data.
+        if "--client" in sys.argv:
+            _write_startup_log("Waiting for the local clinic server client connection.")
+            if not _wait_for_server(timeout=600):
+                raise RuntimeError("انتهت مهلة انتظار خادم العيادة المحلي.")
+            _open_client(cfg.APP_URL)
+            return
+
+        if not _acquire_server_instance():
+            _write_startup_log("A local server instance already owns the database; opening its client.")
+            if not _wait_for_server(timeout=600):
+                raise RuntimeError("قاعدة البيانات قيد التجهيز، وتعذر الاتصال بالخادم خلال المهلة المحددة.")
+            if "--server" not in sys.argv:
+                _open_client(cfg.APP_URL)
+            return
+
         print("جارٍ تجهيز قاعدة البيانات…")
         _run_migrations()
 

@@ -62,7 +62,7 @@ SHEET_PROFILES = {
     "الاحالات": [("ت", "sequence"), ("الاسم", "name"), ("الطبيب", "doctor")],
     "عياده العيون": [("ت", "sequence"), ("الاسم", "name"), ("العمر", "age"), ("الجنس", "gender"), ("المنطقه", "address")],
 }
-IMPORT_REPAIR_MARKER = "[import-repair-v1.3-complete]"
+IMPORT_REPAIR_MARKER = "[import-repair-v1.4-complete]"
 
 
 def _text(value):
@@ -504,6 +504,12 @@ def _match_existing_patient(name, phone, birth_date, gender, address):
     from apps.patients.services import normalize_arabic_text
 
     candidates = Patient.objects.filter(names__normalized_name=normalize_arabic_text(name)).distinct()
+    # Excel's COUNTIF treats every row carrying the same normalized full name
+    # as one history. Prefer the imported card before filtering inconsistent
+    # age, gender or address values from the different workbook sheets.
+    imported_candidate = candidates.filter(source_type="excel").order_by("created_at", "pk").first()
+    if imported_candidate:
+        return imported_candidate
     if birth_date:
         candidates = candidates.filter(date_of_birth=birth_date)
     if gender and gender != "unknown":
@@ -514,10 +520,7 @@ def _match_existing_patient(name, phone, birth_date, gender, address):
             return address_matches.first()
     if candidates.count() == 1:
         return candidates.first()
-    # The historical workbook has no stable patient key beyond the normalized
-    # name.  Reuse the first imported record deterministically so every source
-    # row remains visible instead of creating a new patient for every repeat.
-    return candidates.filter(source_type="excel").order_by("created_at", "pk").first()
+    return None
 
 
 @transaction.atomic

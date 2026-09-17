@@ -52,9 +52,9 @@ class Command(BaseCommand):
 
     def _create_app_version(self):
         from apps.core.models import AppVersion
-        AppVersion.objects.exclude(version_number="1.3.0").update(is_current=False)
+        AppVersion.objects.exclude(version_number="1.4.0").update(is_current=False)
         ver, created = AppVersion.objects.get_or_create(
-            version_number="1.3.0",
+            version_number="1.4.0",
             defaults={
                 "channel": "develop",
                 "is_current": True,

@@ -103,7 +103,7 @@ def patient_search(request):
         "id": str(item.pk), "code": item.internal_code, "name": item.display_name,
         "phone": item.contacts.filter(is_primary=True).values_list("value", flat=True).first() or "—",
         "age": item.calculated_age, "gender": item.gender,
-        "url": reverse("patients:list") + f"?patient={item.pk}",
+        "url": reverse("patients:detail", args=[item.pk]),
     } for item in patients]})
 
 
@@ -127,7 +127,7 @@ def patient_match(request):
         "last_visit": item["latest_visit"].visit_date.date().isoformat() if item["latest_visit"] else "",
         "source": "مستورد" if item["patient"].source_type == "excel" else "مسجل يدوياً",
         "visit_url": reverse("visits:create_for_patient", args=[item["patient"].pk]),
-        "patient_url": reverse("patients:list") + f"?patient={item['patient'].pk}",
+        "patient_url": reverse("patients:detail", args=[item["patient"].pk]),
         "edit_url": reverse("patients:edit", args=[item["patient"].pk]),
     } for item in matches]})
 

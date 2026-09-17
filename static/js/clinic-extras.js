@@ -248,5 +248,6 @@
     document.documentElement.removeAttribute("data-theme"); localStorage.removeItem("clinic-theme");
     setupBirthdate(document); setupSearchableComboboxes(document); setupDepartmentDoctors(document); setupImport(); setupDrawer(); setupPatientChanges(); setupNotifications(); setupLivePatientSearch(document); setupPatientMatcher(document);
     document.querySelectorAll("[data-auto-submit]").forEach(function(item){item.addEventListener("change",function(){item.form.submit();});});
+    document.querySelectorAll("[data-global-back]").forEach(function(button){button.addEventListener("click",function(){if(window.history.length>1){window.history.back();}else{window.location.href=button.dataset.fallbackUrl||"/";}});});
   });
 })();

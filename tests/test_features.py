@@ -208,6 +208,47 @@ class ImportAnalysisTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "بطاقة المريض")
 
+    def test_import_row_detail_with_missing_diagnosis_never_returns_500(self):
+        role = Role.objects.create(name="مدقق بطاقات", code=Role.CODE_AUDITOR)
+        user = User.objects.create_user(username="row-auditor", password="StrongPass123", role=role)
+        batch = ImportBatch.objects.create(file_hash="c" * 64, original_filename="rows.xlsx", import_type="patients", imported_by=user)
+        sheet = ImportSheet.objects.create(batch=batch, sheet_name="عيادة العيون", sheet_index=0)
+        row = SourceRow.objects.create(
+            batch=batch, sheet=sheet, original_row_number=2, row_hash="d" * 64,
+            classification="blocking", normalized_name="وسيم انس حسني",
+            raw_data={"source": {"الاسم": "وسيم انس حسني"}, "canonical": {"name": "وسيم انس حسني", "age": 9, "gender": "ذكر", "address": "الرفاعي"}},
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse("importer:row_detail", args=[row.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "وسيم انس حسني")
+        self.assertContains(response, "إضافة إلى السجل المستورد والمرضى")
+
+    def test_blocking_duplicate_and_repeat_rows_are_all_linked(self):
+        role = Role.objects.create(name="مدقق كل التصنيفات", code=Role.CODE_AUDITOR)
+        user = User.objects.create_user(username="all-rows-auditor", password="StrongPass123", role=role)
+        batch = ImportBatch.objects.create(file_hash="e" * 64, original_filename="all.xlsx", import_type="patients", imported_by=user)
+        sheet = ImportSheet.objects.create(batch=batch, sheet_name="مراجعة المرضى", sheet_index=0)
+        for index, classification in enumerate(("ready", "review", "blocking", "duplicate", "repeat_visit"), 2):
+            SourceRow.objects.create(
+                batch=batch, sheet=sheet, original_row_number=index,
+                row_hash=(str(index) * 64)[:64], classification=classification,
+                normalized_name="مريض واحد كامل علي",
+                raw_data={"source": {"الاسم": "مريض واحد كامل علي"}, "canonical": {"name": "مريض واحد كامل علي", "gender": "ذكر"}},
+            )
+        imported = import_batch_records(batch, user)
+        self.assertEqual(imported, 5)
+        self.assertFalse(batch.rows.filter(linked_patient__isnull=True).exists())
+        self.assertEqual(Patient.objects.filter(names__normalized_name="مريض واحد كامل علي").distinct().count(), 1)
+
+    def test_every_authenticated_page_has_global_back_button(self):
+        role = Role.objects.create(name="مدقق زر الرجوع", code=Role.CODE_AUDITOR)
+        user = User.objects.create_user(username="back-auditor", password="StrongPass123", role=role)
+        self.client.force_login(user)
+        response = self.client.get(reverse("importer:list"))
+        self.assertContains(response, "data-global-back")
+        self.assertContains(response, "رجوع")
+
     def test_gender_variants_are_normalized_without_blocking(self):
         from apps.importer.services import GENDERS, normalize_arabic
 

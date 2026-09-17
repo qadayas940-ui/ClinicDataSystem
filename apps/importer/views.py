@@ -1,7 +1,9 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from apps.core.utils import log_audit, roles_required
 
@@ -63,7 +65,7 @@ def commit_batch(request, pk):
     if request.method == "POST":
         imported = import_batch_records(batch, request.user)
         log_audit(request, "import", "ImportBatch", batch.pk, f"commit:{imported}")
-        messages.success(request, f"تم إدراج {imported:,} سجل قابل للاستيراد. بقيت سجلات المراجعة والمانع دون تغيير.")
+        messages.success(request, f"تم ربط {imported:,} صفاً بملفات المرضى. يشمل ذلك الجاهز والمراجعة والمانع والتكرار والزيارة المحتملة متى احتوى الصف على اسم.")
         if imported:
             return redirect(f"{reverse('patients:list')}?import_batch={batch.pk}")
     return redirect("importer:batch_detail", pk=batch.pk)
@@ -73,9 +75,6 @@ def commit_batch(request, pk):
 def commit_row(request, pk):
     row = get_object_or_404(SourceRow.objects.select_related("batch", "sheet"), pk=pk)
     if request.method == "POST":
-        if row.classification != "ready" and row.status != "accepted":
-            messages.warning(request, "راجع السجل واعتمده أولاً؛ لا يمكن إدراج سجل تحذير أو تكرار تلقائياً.")
-            return redirect("importer:row_detail", pk=row.pk)
         imported = import_batch_records(row.batch, request.user, source_row=row)
         if imported:
             messages.success(request, "تمت إضافة السجل وربطه بمريض داخل النظام.")
@@ -108,15 +107,20 @@ def row_detail(request, pk):
         log_audit(request, "update", "SourceRow", row.pk, f"review:{decision}")
         messages.success(request, "تم حفظ قرار المراجعة دون تغيير السجل الأصلي.")
         return redirect("importer:batch_detail", pk=row.batch_id)
-    sibling_ids = list(row.batch.rows.order_by("sheet_id", "original_row_number").values_list("pk", flat=True))
-    index = sibling_ids.index(row.pk)
+    previous_row = row.batch.rows.filter(
+        Q(sheet_id__lt=row.sheet_id) | Q(sheet_id=row.sheet_id, original_row_number__lt=row.original_row_number)
+    ).order_by("-sheet_id", "-original_row_number").only("pk").first()
+    next_row = row.batch.rows.filter(
+        Q(sheet_id__gt=row.sheet_id) | Q(sheet_id=row.sheet_id, original_row_number__gt=row.original_row_number)
+    ).order_by("sheet_id", "original_row_number").only("pk").first()
     canonical = row.raw_data.get("canonical", {})
     from .services import GENDERS, normalize_arabic
     return render(request, "importer/row_detail.html", {
         "row": row,
         "form": form,
         "canonical": canonical,
+        "canonical_status": canonical.get("status") or canonical.get("diagnosis") or "—",
         "canonical_gender": GENDERS.get(normalize_arabic(canonical.get("gender")), "unknown"),
-        "previous_id": sibling_ids[index - 1] if index > 0 else None,
-        "next_id": sibling_ids[index + 1] if index + 1 < len(sibling_ids) else None,
+        "previous_id": previous_row.pk if previous_row else None,
+        "next_id": next_row.pk if next_row else None,
     })
