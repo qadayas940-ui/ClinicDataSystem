@@ -66,6 +66,9 @@ jobs:
         run: pyinstaller --clean --noconfirm ClinicDataSystem.spec
       - name: Build installer
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ClinicDataSystem.iss'
+      - name: Verify versioned installer
+        shell: pwsh
+        run: Test-Path "release\\ClinicDataSystem-Setup-1.5.3.exe" | Should -BeTrue
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
