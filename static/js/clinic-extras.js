@@ -77,7 +77,11 @@
         var typed=(query||"").trim(), normalized=typed.toLowerCase();
         var items=options().filter(function(option){return !normalized||option.text.toLowerCase().indexOf(normalized)>=0;});
         var exact=items.some(function(option){return option.text.trim().toLowerCase()===normalized;});
-        menu.innerHTML=items.map(function(option){return '<button type="button" data-value="'+escapeHtml(option.value)+'">'+escapeHtml(option.text)+'</button>';}).join("");
+        var editTemplate=select.dataset.referenceCategory==="department"?document.body.dataset.departmentEditUrl:document.body.dataset.referenceEditUrl;
+        menu.innerHTML=items.map(function(option){
+          var edit=editTemplate?'<a class="combo-edit" href="'+escapeHtml(editTemplate.replace("/0/","/"+option.value+"/"))+'" title="تعديل القيمة">✎</a>':'';
+          return '<span class="combo-option-row"><button type="button" data-value="'+escapeHtml(option.value)+'">'+escapeHtml(option.text)+'</button>'+edit+'</span>';
+        }).join("");
         if(select.dataset.referenceCategory&&typed.length>=2&&!exact){menu.insertAdjacentHTML("beforeend",'<button type="button" class="combo-add" data-add-value="'+escapeHtml(typed)+'">＋ إضافة «'+escapeHtml(typed)+'» إلى القائمة</button>');}
         if(!menu.children.length)menu.innerHTML='<span>لا توجد نتائج</span>';
         menu.hidden=false;

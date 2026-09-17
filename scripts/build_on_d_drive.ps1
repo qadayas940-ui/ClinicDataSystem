@@ -72,7 +72,7 @@ if ($DesktopDir) {
 $IsccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 if (Test-Path $IsccPath) {
     & $IsccPath "installer\ClinicDataSystem.iss"
-    $SetupPath = Join-Path $RepoDir "release\ClinicDataSystem-Setup-1.5.0.exe"
+    $SetupPath = Join-Path $RepoDir "release\ClinicDataSystem-Setup-1.5.1.exe"
     if (Test-Path $SetupPath) {
         Write-Host "Installer ready:"
         Write-Host $SetupPath

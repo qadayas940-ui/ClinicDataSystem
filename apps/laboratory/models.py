@@ -2,7 +2,7 @@
 from django.conf import settings
 from django.db import models
 
-from apps.core.models import SoftDeleteModel
+from apps.core.models import ReferenceValue, SoftDeleteModel
 
 
 class LabOrder(SoftDeleteModel):
@@ -18,6 +18,16 @@ class LabOrder(SoftDeleteModel):
     visit = models.ForeignKey("visits.Visit", verbose_name="الزيارة", on_delete=models.SET_NULL, null=True, blank=True, related_name="lab_orders")
     order_date = models.DateTimeField("تاريخ الطلب")
     requesting_doctor = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="الطبيب الطالب", on_delete=models.SET_NULL, null=True, blank=True, related_name="lab_orders")
+    requesting_doctor_reference = models.ForeignKey(
+        ReferenceValue,
+        verbose_name="الطبيب الطالب من دليل الأطباء",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="requested_lab_orders",
+        limit_choices_to={"category": "doctor", "is_active": True},
+        help_text="يُستخدم دليل الأطباء المشترك، مع إبقاء حساب الطبيب القديم للتوافق مع السجلات السابقة.",
+    )
     status = models.CharField("الحالة", max_length=20, choices=STATUS_CHOICES, default="pending")
     result_date = models.DateTimeField("تاريخ النتيجة", null=True, blank=True)
     notes = models.TextField("ملاحظات", blank=True, default="")
@@ -29,6 +39,10 @@ class LabOrder(SoftDeleteModel):
 
     def __str__(self):
         return f"طلب مخبري {self.patient} @ {self.order_date}"
+
+    @property
+    def requesting_doctor_display(self):
+        return self.requesting_doctor_reference or self.requesting_doctor
 
 
 class LabOrderTest(SoftDeleteModel):

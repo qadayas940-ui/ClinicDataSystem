@@ -13,7 +13,9 @@ from .models import LabOrder, LabOrderTest
 
 @login_required
 def order_list(request):
-    orders = LabOrder.objects.select_related("patient", "patient__primary_name", "requesting_doctor").prefetch_related("tests")
+    orders = LabOrder.objects.select_related(
+        "patient", "patient__primary_name", "requesting_doctor", "requesting_doctor_reference"
+    ).prefetch_related("tests")
     if request.GET.get("patient"): orders = orders.filter(patient_id=request.GET["patient"])
     return render(request, "laboratory/list.html", {"page": Paginator(orders, 30).get_page(request.GET.get("page"))})
 
@@ -35,7 +37,9 @@ def order_create(request, patient_id=None):
 @roles_required("doctor", "organizer", "data_auditor")
 @transaction.atomic
 def order_edit(request, pk):
-    order = get_object_or_404(LabOrder.objects.prefetch_related("tests"), pk=pk)
+    order = get_object_or_404(
+        LabOrder.objects.select_related("requesting_doctor_reference").prefetch_related("tests"), pk=pk
+    )
     form = LabOrderForm(request.POST or None, instance=order, patient=order.patient)
     if request.method == "POST" and form.is_valid():
         order = form.save()

@@ -185,7 +185,7 @@ def dashboard(request):
 
 @owner_required
 def department_list(request):
-    return render(request, "core/departments.html", {"departments": Department.objects.all()})
+    return render(request, "core/departments.html", {"departments": Department.all_objects.all()})
 
 
 @owner_required
@@ -201,7 +201,7 @@ def settings_home(request):
 def reference_list(request):
     category = request.GET.get("category", "")
     query = request.GET.get("q", "").strip()
-    items = ReferenceValue.objects.all()
+    items = ReferenceValue.all_objects.all()
     if category:
         items = items.filter(category=category)
     if query:
@@ -217,7 +217,7 @@ def reference_list(request):
 
 @owner_required
 def reference_form(request, pk=None):
-    item = get_object_or_404(ReferenceValue, pk=pk) if pk else None
+    item = get_object_or_404(ReferenceValue.all_objects, pk=pk) if pk else None
     form = ReferenceValueForm(request.POST or None, instance=item)
     if request.method == "POST" and form.is_valid():
         item = form.save(commit=False)
@@ -231,6 +231,32 @@ def reference_form(request, pk=None):
         "title": "تعديل قيمة مرجعية" if pk else "إضافة قيمة مرجعية",
         "submit_label": "حفظ",
     })
+
+
+@owner_required
+@require_POST
+def reference_archive(request, pk):
+    item = get_object_or_404(ReferenceValue, pk=pk)
+    item.is_active = False
+    item.save(update_fields=["is_active", "updated_at"])
+    item.soft_delete()
+    log_audit(request, "delete", "ReferenceValue", item.pk, item.canonical_name)
+    messages.success(request, "تمت أرشفة القيمة مع الاحتفاظ بجميع السجلات المرتبطة بها.")
+    return redirect(request.POST.get("next") or "core:reference_list")
+
+
+@owner_required
+@require_POST
+def reference_restore(request, pk):
+    item = get_object_or_404(ReferenceValue.all_objects, pk=pk)
+    if item.deleted_at:
+        item.restore()
+    if not item.is_active:
+        item.is_active = True
+        item.save(update_fields=["is_active", "updated_at"])
+    log_audit(request, "restore", "ReferenceValue", item.pk, item.canonical_name)
+    messages.success(request, "تمت استعادة القيمة إلى القوائم.")
+    return redirect(request.POST.get("next") or "core:reference_list")
 
 
 @roles_required("doctor", "organizer", "data_auditor")
@@ -273,7 +299,7 @@ def reference_quick_create(request):
 
 @owner_required
 def department_form(request, pk=None):
-    department = get_object_or_404(Department, pk=pk) if pk else None
+    department = get_object_or_404(Department.all_objects, pk=pk) if pk else None
     form = DepartmentForm(request.POST or None, instance=department)
     if request.method == "POST" and form.is_valid():
         department = form.save()
@@ -288,6 +314,20 @@ def department_archive(request, pk):
     if request.method == "POST":
         department.soft_delete()
         log_audit(request, "delete", "Department", department.pk, department.name)
+    return redirect("core:departments")
+
+
+@owner_required
+@require_POST
+def department_restore(request, pk):
+    department = get_object_or_404(Department.all_objects, pk=pk)
+    if department.deleted_at:
+        department.restore()
+    if not department.is_active:
+        department.is_active = True
+        department.save(update_fields=["is_active", "updated_at"])
+    log_audit(request, "restore", "Department", department.pk, department.name)
+    messages.success(request, "تمت استعادة القسم.")
     return redirect("core:departments")
 
 

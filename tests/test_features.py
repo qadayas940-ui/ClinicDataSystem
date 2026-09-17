@@ -134,6 +134,66 @@ class PatientWorkflowTests(TestCase):
         self.assertEqual(response.json()["unread"], 0)
         self.assertEqual(Notification.objects.count(), 2)
 
+    def test_reference_combo_quick_create_and_reuse(self):
+        self.client.force_login(self.user)
+        url = reverse("core:reference_quick_create")
+        first = self.client.post(url, {"category": "organizer", "name": "يحيى أحمد"}, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(first.status_code, 200)
+        self.assertTrue(first.json()["created"])
+        second = self.client.post(url, {"category": "organizer", "name": "يحيى أحمد"}, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(second.status_code, 200)
+        self.assertFalse(second.json()["created"])
+        self.assertEqual(ReferenceValue.objects.filter(category="organizer").count(), 1)
+
+    def test_referral_can_be_edited_with_reference_doctor(self):
+        from apps.referrals.models import Referral
+        patient = create_patient({"full_name": "مريض إحالة اختبار كامل", "gender": "male", "date_of_birth": None, "approx_age_value": 25, "approx_age_unit": "year", "phone": "07702222222", "address": "الموصل"}, self.user)
+        doctor = ReferenceValue.objects.create(category="doctor", canonical_name="طبيب إحالة", normalized_name="طبيب احاله")
+        item = Referral.objects.create(patient=patient, destination_name="مستشفى", referral_date=timezone.now())
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("referrals:edit", args=[item.pk]), {
+            "patient_code": patient.internal_code, "referring_doctor_reference": doctor.pk,
+            "destination_name": "مستشفى تخصصي", "destination_type": "مستشفى",
+            "reason": "استشارة", "referral_date": "2026-09-17T10:00", "status": "pending", "followup_notes": "",
+        })
+        self.assertEqual(response.status_code, 302)
+        item.refresh_from_db()
+        self.assertEqual(item.referring_doctor_reference, doctor)
+
+    def test_lab_order_uses_shared_reference_doctor(self):
+        patient = create_patient({"full_name": "مريض مختبر اختبار كامل", "gender": "male", "date_of_birth": None, "approx_age_value": 25, "approx_age_unit": "year", "phone": "07703333333", "address": "الموصل"}, self.user)
+        doctor = ReferenceValue.objects.create(category="doctor", canonical_name="طبيب مختبر حقيقي", normalized_name="طبيب مختبر حقيقي")
+        self.client.force_login(self.user)
+        response = self.client.post(reverse("laboratory:create_for_patient", args=[patient.pk]), {
+            "patient_code": patient.internal_code,
+            "order_date": "2026-09-17T10:00",
+            "requesting_doctor_reference": doctor.pk,
+            "status": "pending",
+            "test_name": "CBC",
+            "result_value": "",
+            "unit": "",
+            "notes": "",
+        })
+        self.assertEqual(response.status_code, 302)
+        order = LabOrder.objects.get(patient=patient)
+        self.assertEqual(order.requesting_doctor_reference, doctor)
+        self.assertEqual(str(order.requesting_doctor_display), "طبيب مختبر حقيقي")
+
+    def test_owner_can_archive_and_restore_reference_without_deleting_history(self):
+        owner_role = Role.objects.create(name="مالك القوائم", code=Role.CODE_OWNER)
+        owner = User.objects.create_user(username="reference-owner", password="StrongPass123", role=owner_role)
+        item = ReferenceValue.objects.create(category="doctor", canonical_name="طبيب قابل للأرشفة", normalized_name="طبيب قابل للارشفة")
+        self.client.force_login(owner)
+        response = self.client.post(reverse("core:reference_archive", args=[item.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ReferenceValue.objects.filter(pk=item.pk).exists())
+        self.assertTrue(ReferenceValue.all_objects.filter(pk=item.pk, deleted_at__isnull=False).exists())
+        response = self.client.post(reverse("core:reference_restore", args=[item.pk]))
+        self.assertEqual(response.status_code, 302)
+        item.refresh_from_db()
+        self.assertTrue(item.is_active)
+        self.assertIsNone(item.deleted_at)
+
 
 class ImportAnalysisTests(TestCase):
     def _workbook(self, path):

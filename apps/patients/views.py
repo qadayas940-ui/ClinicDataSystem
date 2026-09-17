@@ -5,7 +5,7 @@ import qrcode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Max, Prefetch, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -21,10 +21,26 @@ from .services import create_patient, find_patient_candidates, normalize_arabic_
 
 @login_required
 def patient_list(request, source_only=None):
+    from apps.importer.models import SourceRow
+    from apps.visits.models import Visit
+
     query = request.GET.get("q", "").strip()
     phone_query = request.GET.get("phone", "").strip()
     age_query = request.GET.get("age", "").strip()
-    patients = Patient.objects.select_related("primary_name").prefetch_related("contacts", "addresses", "visits__department", "visits__doctor_reference", "visits__organizer_reference")
+    patients = Patient.objects.select_related("primary_name").prefetch_related(
+        "contacts",
+        "addresses",
+        Prefetch(
+            "visits",
+            queryset=Visit.objects.select_related("department", "doctor_reference", "organizer_reference").order_by("-visit_date"),
+            to_attr="_prefetched_visits",
+        ),
+        Prefetch(
+            "source_rows",
+            queryset=SourceRow.objects.select_related("sheet").order_by("-batch_id", "-original_row_number"),
+            to_attr="_prefetched_source_rows",
+        ),
+    )
     if query:
         normalized_query = normalize_arabic_text(query)
         patients = patients.filter(

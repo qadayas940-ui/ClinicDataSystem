@@ -93,16 +93,21 @@ class Patient(SoftDeleteModel):
 
     @property
     def latest_visit(self):
+        if hasattr(self, "_prefetched_visits"):
+            return self._prefetched_visits[0] if self._prefetched_visits else None
         return self.visits.select_related("department", "doctor_reference", "organizer_reference").first()
 
     @property
     def latest_source_row(self):
+        if hasattr(self, "_prefetched_source_rows"):
+            return self._prefetched_source_rows[0] if self._prefetched_source_rows else None
         return self.source_rows.select_related("sheet").order_by("-batch_id", "-original_row_number").first()
 
     @property
     def total_visit_count(self):
         """العدد المحفوظ فعلياً أو العدد التاريخي من Excel، أيهما أكبر."""
-        return max(self.visits.count(), self.imported_visit_count or 0)
+        detailed_count = len(self._prefetched_visits) if hasattr(self, "_prefetched_visits") else self.visits.count()
+        return max(detailed_count, self.imported_visit_count or 0)
 
 
 class PatientSequence(models.Model):

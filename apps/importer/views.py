@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -91,7 +91,8 @@ def batch_detail(request, pk):
     if selected:
         rows = rows.filter(classification=selected)
     page = Paginator(rows, 50).get_page(request.GET.get("page"))
-    counts = {key: batch.rows.filter(classification=key).count() for key, _ in SourceRow.CLASSIFICATION_CHOICES}
+    grouped = dict(batch.rows.values_list("classification").annotate(total=Count("id")))
+    counts = {key: grouped.get(key, 0) for key, _ in SourceRow.CLASSIFICATION_CHOICES}
     return render(request, "importer/batch_detail.html", {"batch": batch, "page": page, "counts": counts, "selected": selected})
 
 
