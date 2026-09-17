@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.4.0",
   "channel": "stable",
   "update_type": "optional",
   "download_url": "https://example.invalid/ClinicDataSystem-Setup.exe",
