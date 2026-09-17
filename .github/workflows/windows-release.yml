@@ -3,7 +3,7 @@ name: Windows installer
 on:
   workflow_dispatch:
   push:
-    branches: ["codex/v1-complete"]
+    branches: ["codex/v1-complete", "codex/v1-5-build"]
     tags: ["v*"]
 
 permissions:
@@ -18,7 +18,7 @@ jobs:
         env:
           POSTGRES_DB: clinic_data
           POSTGRES_USER: clinic_user
-          POSTGRES_PASSWORD: clinic_test_password
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -28,8 +28,8 @@ jobs:
           --health-retries 5
     env:
       DJANGO_SETTINGS_MODULE: config.settings.production
-      SECRET_KEY: github-actions-production-verification-secret
-      DATABASE_URL: postgresql://clinic_user:clinic_test_password@127.0.0.1:5432/clinic_data
+      SECRET_KEY: test-only-not-for-production
+      DATABASE_URL: postgresql://clinic_user@127.0.0.1:5432/clinic_data
       ALLOWED_HOSTS: 127.0.0.1,localhost,testserver
     steps:
       - uses: actions/checkout@v4
