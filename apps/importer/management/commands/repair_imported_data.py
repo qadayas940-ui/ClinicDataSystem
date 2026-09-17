@@ -72,9 +72,14 @@ def merge_duplicate_imported_patients():
 class Command(BaseCommand):
     help = "ربط الصفوف التاريخية الناقصة وتصحيح عدد المراجعات المحسوب من Excel."
 
+    def add_arguments(self, parser):
+        parser.add_argument("--incomplete", action="store_true", help="إصلاح الدفعات غير المكتملة فقط.")
+
     @transaction.atomic
     def handle(self, *args, **options):
         batches = ImportBatch.objects.filter(import_type="patients")
+        if options["incomplete"]:
+            batches = batches.exclude(status="completed")
         duplicate_cards = (
             PatientName.objects.filter(patient__source_type="excel", patient__deleted_at__isnull=True, is_primary=True)
             .values("normalized_name").annotate(total=Count("patient_id", distinct=True)).filter(total__gt=1).exists()
