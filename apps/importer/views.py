@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import close_old_connections
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -10,6 +11,25 @@ from apps.core.utils import log_audit, roles_required
 from .forms import ReviewForm, WorkbookUploadForm
 from .models import ImportBatch, ImportSheet, ReviewDecision, SourceRow
 from .services import HEADER_ALIASES, analyze_workbook, archive_upload, import_batch_records, remap_sheet
+
+
+def _import_batch_in_background(batch_id, user_id):
+    """Keep large Excel commits off the request/Waitress worker thread."""
+    import threading
+    from django.contrib.auth import get_user_model
+
+    def run():
+        close_old_connections()
+        try:
+            batch = ImportBatch.objects.get(pk=batch_id)
+            user = get_user_model().objects.get(pk=user_id)
+            import_batch_records(batch, user)
+        except Exception as exc:
+            ImportBatch.objects.filter(pk=batch_id, status="processing").update(status="failed", notes=str(exc)[:1000])
+        finally:
+            close_old_connections()
+
+    threading.Thread(target=run, name=f"excel-import-{batch_id}", daemon=True).start()
 
 
 @login_required
@@ -63,11 +83,12 @@ def sheet_mapping(request, pk):
 def commit_batch(request, pk):
     batch = get_object_or_404(ImportBatch, pk=pk)
     if request.method == "POST":
-        imported = import_batch_records(batch, request.user)
-        log_audit(request, "import", "ImportBatch", batch.pk, f"commit:{imported}")
-        messages.success(request, f"تم ربط {imported:,} صفاً بملفات المرضى. يشمل ذلك الجاهز والمراجعة والمانع والتكرار والزيارة المحتملة متى احتوى الصف على اسم.")
-        if imported:
-            return redirect(f"{reverse('patients:list')}?import_batch={batch.pk}")
+        claimed = ImportBatch.objects.filter(pk=batch.pk, status="reviewing").update(status="processing", completed_at=None)
+        if claimed:
+            _import_batch_in_background(batch.pk, request.user.pk)
+            messages.success(request, "بدأ دمج ملف Excel في الخلفية. يمكنك متابعة العمل وسيظهر اكتماله في هذه الدفعة.")
+        else:
+            messages.warning(request, "هذه الدفعة قيد الدمج أو اكتملت سابقاً؛ مُنع تشغيل دمج ثانٍ لها.")
     return redirect("importer:batch_detail", pk=batch.pk)
 
 
