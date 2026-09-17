@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}إعدادات الحساب{% endblock %}
+{% block content %}
+<section class="page-head"><div><h1>إعدادات الحساب</h1><p>تعديل الاسم والبريد الإلكتروني وإدارة كلمة المرور.</p></div></section>
+<form method="post" class="panel form-panel">{% csrf_token %}<div class="form-grid">{% for field in form %}<div class="field"><label>{{ field.label }}</label>{{ field }}{% for error in field.errors %}<small class="error-text">{{ error }}</small>{% endfor %}</div>{% endfor %}</div><div class="form-actions"><button class="btn btn-primary">حفظ البيانات</button><a class="btn btn-secondary" href="{% url 'accounts:change_password' %}">تغيير كلمة المرور</a></div></form>
+{% endblock %}

@@ -16,6 +16,7 @@ from .forms import (
     ArabicPasswordChangeForm,
     OwnerSetupForm,
     StaffUserForm,
+    AccountProfileForm,
 )
 from .models import User
 
@@ -120,6 +121,17 @@ def change_password(request):
     else:
         form = ArabicPasswordChangeForm(request.user)
     return render(request, "accounts/change_password.html", {"form": form})
+
+
+@login_required
+def profile(request):
+    form = AccountProfileForm(request.POST or None, instance=request.user)
+    if request.method == "POST" and form.is_valid():
+        user = form.save()
+        log_audit(request, "update", "User", user.pk, "profile")
+        messages.success(request, "تم تحديث بيانات الحساب.")
+        return redirect("accounts:profile")
+    return render(request, "accounts/profile.html", {"form": form})
 
 
 @owner_required

@@ -17,6 +17,11 @@ class Referral(SoftDeleteModel):
     patient = models.ForeignKey("patients.Patient", verbose_name="المريض", on_delete=models.PROTECT, related_name="referrals")
     source_visit = models.ForeignKey("visits.Visit", verbose_name="الزيارة المصدر", on_delete=models.SET_NULL, null=True, blank=True, related_name="referrals")
     referring_doctor = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="الطبيب المُحيل", on_delete=models.SET_NULL, null=True, blank=True, related_name="referrals")
+    referring_doctor_reference = models.ForeignKey(
+        "core.ReferenceValue", verbose_name="الطبيب المُحيل من السجل المرجعي",
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="referred_cases", limit_choices_to={"category": "doctor"},
+    )
     destination_name = models.CharField("جهة الإحالة", max_length=200)
     destination_type = models.CharField("نوع الجهة", max_length=80, blank=True, default="")
     reason = models.TextField("سبب الإحالة", blank=True, default="")

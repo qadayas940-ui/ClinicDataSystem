@@ -73,12 +73,43 @@
       select.parentNode.insertBefore(wrapper,select); wrapper.appendChild(input); wrapper.appendChild(button); wrapper.appendChild(menu); wrapper.appendChild(select); select.classList.add("combo-native");
       function options(){return Array.from(select.options).filter(function(option){return option.value;});}
       function selectedText(){var option=select.options[select.selectedIndex];return option&&option.value?option.text:"";}
-      function render(query){var normalized=(query||"").trim().toLowerCase();var items=options().filter(function(option){return !normalized||option.text.toLowerCase().indexOf(normalized)>=0;});menu.innerHTML=items.length?items.map(function(option){return '<button type="button" data-value="'+escapeHtml(option.value)+'">'+escapeHtml(option.text)+'</button>';}).join(""):'<span>لا توجد نتائج</span>';menu.hidden=false;menu.querySelectorAll("button").forEach(function(item){item.addEventListener("click",function(){select.value=item.dataset.value;input.value=selectedText();menu.hidden=true;select.dispatchEvent(new Event("change",{bubbles:true}));});});}
+      function render(query){
+        var typed=(query||"").trim(), normalized=typed.toLowerCase();
+        var items=options().filter(function(option){return !normalized||option.text.toLowerCase().indexOf(normalized)>=0;});
+        var exact=items.some(function(option){return option.text.trim().toLowerCase()===normalized;});
+        menu.innerHTML=items.map(function(option){return '<button type="button" data-value="'+escapeHtml(option.value)+'">'+escapeHtml(option.text)+'</button>';}).join("");
+        if(select.dataset.referenceCategory&&typed.length>=2&&!exact){menu.insertAdjacentHTML("beforeend",'<button type="button" class="combo-add" data-add-value="'+escapeHtml(typed)+'">＋ إضافة «'+escapeHtml(typed)+'» إلى القائمة</button>');}
+        if(!menu.children.length)menu.innerHTML='<span>لا توجد نتائج</span>';
+        menu.hidden=false;
+        menu.querySelectorAll("button[data-value]").forEach(function(item){item.addEventListener("click",function(){select.value=item.dataset.value;input.value=selectedText();menu.hidden=true;select.dispatchEvent(new Event("change",{bubbles:true}));});});
+        var add=menu.querySelector("[data-add-value]"); if(add)add.addEventListener("click",function(){quickCreateReference(select,input,menu,add.dataset.addValue);});
+      }
       input.value=selectedText(); input.addEventListener("input",function(){render(input.value);}); input.addEventListener("focus",function(){render(input.value);}); button.addEventListener("click",function(){if(menu.hidden)render("");else menu.hidden=true;});
       select.addEventListener("change",function(){input.value=selectedText();});
       select._comboRefresh=function(){input.value=selectedText();if(!menu.hidden)render(input.value);};
       document.addEventListener("click",function(event){if(!wrapper.contains(event.target))menu.hidden=true;});
     });
+    root.querySelectorAll("input[data-reference-text]").forEach(function(input){
+      if(input.dataset.referenceReady)return; input.dataset.referenceReady="1";
+      var hint=document.createElement("button"); hint.type="button"; hint.className="reference-text-add btn btn-secondary btn-sm"; hint.hidden=true;
+      input.insertAdjacentElement("afterend",hint);
+      input.addEventListener("input",function(){var value=input.value.trim();hint.hidden=value.length<2;hint.textContent="＋ إضافة «"+value+"» إلى القائمة";});
+      hint.addEventListener("click",function(){quickCreateReference(input,input,hint,input.value.trim(),true);});
+    });
+  }
+
+  function csrfToken(){var match=document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);return match?decodeURIComponent(match[1]):"";}
+  function quickCreateReference(control,input,menu,name,textOnly){
+    var url=document.body.dataset.referenceCreateUrl, category=control.dataset.referenceCategory;
+    if(!url||!category||!name)return;
+    var data=new FormData();data.append("category",category);data.append("name",name);
+    var form=control.closest("form"),department=form&&form.querySelector("[data-department-select]");if(department&&department.value)data.append("department",department.value);
+    fetch(url,{method:"POST",body:data,headers:{"X-Requested-With":"XMLHttpRequest","X-CSRFToken":csrfToken()}}).then(function(response){return response.json().then(function(body){if(!response.ok)throw body;return body;});}).then(function(result){
+      if(textOnly){menu.hidden=true;return;}
+      var existing=Array.from(control.options).find(function(option){return option.value===String(result.item.id);});
+      if(!existing){existing=document.createElement("option");existing.value=result.item.id;existing.textContent=result.item.text;control.appendChild(existing);}
+      control.value=String(result.item.id);input.value=result.item.text;menu.hidden=true;control.dispatchEvent(new Event("change",{bubbles:true}));
+    }).catch(function(error){alert(error.error||"تعذر إضافة القيمة إلى القائمة.");});
   }
 
   function setupImport() {

@@ -5,7 +5,7 @@
   <title>{% block title %}{{ APP_NAME }}{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/clinic.css' %}"><link rel="stylesheet" href="{% static 'css/clinic-extras.css' %}">{% block extra_head %}{% endblock %}
 </head>
-<body class="clinic-body"><div class="app-shell">
+<body class="clinic-body" data-reference-create-url="{% url 'core:reference_quick_create' %}" data-ui-language="{{ UI_LANG }}"><div class="app-shell">
   <aside class="side-nav" data-menu>
     <a class="side-brand" href="{% url 'core:dashboard' %}"><img src="{% static 'img/clinic-logo.png' %}" width="52" height="52" alt="شعار العيادة"><span><b>{{ FACILITY_NAME }}</b><small>{{ APP_NAME }}</small></span></a>
     <button class="sidebar-collapse" type="button" data-sidebar-collapse title="{% if UI_LANG == 'en' %}Collapse navigation{% else %}طي القائمة{% endif %}"><span>‹</span></button>

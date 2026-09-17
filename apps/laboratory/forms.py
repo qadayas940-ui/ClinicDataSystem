@@ -28,4 +28,5 @@ class LabOrderForm(PatientCodeModelFormMixin, forms.ModelForm):
                 self.fields["test_name"].initial = test.test_name
                 self.fields["result_value"].initial = test.result_value
                 self.fields["unit"].initial = test.unit
+        self.fields["test_name"].widget.attrs.update({"data-reference-text": "1", "data-reference-category": "lab_test"})
         for field in self.fields.values(): field.widget.attrs.setdefault("class", "form-control")

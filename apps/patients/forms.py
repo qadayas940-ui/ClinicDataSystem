@@ -112,6 +112,10 @@ class PatientForm(forms.Form):
         self.fields["doctor_reference"].widget.attrs["data-doctor-select"] = "1"
         for name in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference"):
             self.fields[name].widget.attrs["data-searchable-combobox"] = "1"
+        self.fields["department"].widget.attrs["data-reference-category"] = "department"
+        self.fields["doctor_reference"].widget.attrs["data-reference-category"] = "doctor"
+        self.fields["organizer_reference"].widget.attrs["data-reference-category"] = "organizer"
+        self.fields["diagnosis_reference"].widget.attrs["data-reference-category"] = "diagnosis"
         self.fields["full_name"].widget.attrs["data-patient-match-name"] = "1"
         self.fields["phone"].widget.attrs["data-patient-match-phone"] = "1"
         self.fields["approx_age_value"].widget.attrs["data-patient-match-age"] = "1"

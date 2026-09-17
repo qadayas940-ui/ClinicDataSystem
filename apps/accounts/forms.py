@@ -133,3 +133,15 @@ class StaffUserForm(forms.ModelForm):
         if commit:
             user.save()
         return user
+
+
+class AccountProfileForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name", "email"]
+        labels = {"first_name": "الاسم الأول", "last_name": "بقية الاسم", "email": "البريد الإلكتروني"}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")

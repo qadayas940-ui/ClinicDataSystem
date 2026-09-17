@@ -21,5 +21,6 @@ urlpatterns = [
     path("settings/", views.settings_home, name="settings"),
     path("settings/references/", views.reference_list, name="reference_list"),
     path("settings/references/new/", views.reference_form, name="reference_create"),
+    path("settings/references/quick-create/", views.reference_quick_create, name="reference_quick_create"),
     path("settings/references/<int:pk>/edit/", views.reference_form, name="reference_edit"),
 ]

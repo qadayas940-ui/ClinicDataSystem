@@ -23,6 +23,9 @@ class VisitForm(PatientCodeModelFormMixin, forms.ModelForm):
         self.fields["doctor_reference"].widget.attrs["data-doctor-select"] = "1"
         for name in ("visit_type", "department", "doctor_reference", "organizer_reference", "status"):
             self.fields[name].widget.attrs["data-searchable-combobox"] = "1"
+        self.fields["department"].widget.attrs["data-reference-category"] = "department"
+        self.fields["doctor_reference"].widget.attrs["data-reference-category"] = "doctor"
+        self.fields["organizer_reference"].widget.attrs["data-reference-category"] = "organizer"
         self.fields["visit_date"].initial = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")

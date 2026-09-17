@@ -3,7 +3,7 @@
 {% block content %}
 <section class="page-head"><div><h1>الإعدادات</h1><p>إدارة النظام والعيادة من مكان واحد.</p></div></section>
 <div class="settings-grid">
-  <a class="settings-card" href="{% url 'accounts:change_password' %}"><b>الحساب والأمان</b><span>كلمة المرور وإعدادات الحساب</span></a>
+  <a class="settings-card" href="{% url 'accounts:profile' %}"><b>الحساب والأمان</b><span>الاسم والبريد وكلمة المرور</span></a>
   <a class="settings-card" href="{% url 'accounts:user_list' %}"><b>الموظفون والأدوار</b><span>الحسابات والصلاحيات والأقسام</span></a>
   <a class="settings-card" href="{% url 'core:departments' %}"><b>الأقسام والأطباء</b><span>إدارة أقسام العيادة والكوادر</span></a>
   <a class="settings-card" href="{% url 'core:reference_list' %}"><b>قوائم الاستيراد</b><span>الأطباء والفحوصات والإحالات والمناطق</span></a>

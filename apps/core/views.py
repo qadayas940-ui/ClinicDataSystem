@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import socket
+import uuid
 from datetime import timedelta
 
 from django.conf import settings
@@ -13,6 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import connection, models
 from django.http import JsonResponse
+from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -21,7 +23,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from .forms import DepartmentForm, ReferenceValueForm, ServerSettingsForm
 from .models import BackupHistory, Department, Notification, ReferenceValue, ServerSettings
-from .utils import log_audit, owner_required
+from .utils import log_audit, owner_required, roles_required
 
 logger = logging.getLogger("clinic")
 User = get_user_model()
@@ -229,6 +231,44 @@ def reference_form(request, pk=None):
         "title": "تعديل قيمة مرجعية" if pk else "إضافة قيمة مرجعية",
         "submit_label": "حفظ",
     })
+
+
+@roles_required("doctor", "organizer", "data_auditor")
+@require_POST
+def reference_quick_create(request):
+    """Create/reuse a reference item directly from an editable combo box."""
+    allowed = {key for key, _label in ReferenceValue.CATEGORY_CHOICES}
+    category = request.POST.get("category", "").strip()
+    name = re.sub(r"\s+", " ", request.POST.get("name", "").strip())
+    if category not in allowed or len(name) < 2 or len(name) > 255:
+        return JsonResponse({"ok": False, "error": "القيمة أو التصنيف غير صالح."}, status=400)
+    normalized = re.sub(r"[إأآٱ]", "ا", name.lower())
+    normalized = re.sub(r"ى", "ي", normalized)
+    normalized = re.sub(r"ة", "ه", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    if category == "department":
+        item = Department.objects.filter(name__iexact=name).first()
+        created = item is None
+        if item is None:
+            item = Department.objects.create(name=name, code=f"DPT-{uuid.uuid4().hex[:8].upper()}", is_active=True)
+        log_audit(request, "create" if created else "update", "Department", item.pk, item.name)
+        return JsonResponse({"ok": True, "created": created, "item": {"id": item.pk, "text": item.name}})
+    item, created = ReferenceValue.all_objects.get_or_create(
+        category=category, normalized_name=normalized,
+        defaults={"canonical_name": name, "aliases": [name], "is_active": True},
+    )
+    if item.deleted_at:
+        item.restore()
+    if not item.is_active:
+        item.is_active = True
+        item.save(update_fields=["is_active", "updated_at"])
+    department_id = request.POST.get("department")
+    if category == "doctor" and department_id:
+        department = Department.objects.filter(pk=department_id, is_active=True).first()
+        if department:
+            item.departments.add(department)
+    log_audit(request, "create" if created else "update", "ReferenceValue", item.pk, item.canonical_name)
+    return JsonResponse({"ok": True, "created": created, "item": {"id": item.pk, "text": item.canonical_name}})
 
 
 @owner_required

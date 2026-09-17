@@ -12,7 +12,7 @@ from .models import Referral
 
 @login_required
 def referral_list(request):
-    items = Referral.objects.select_related("patient", "patient__primary_name", "referring_doctor")
+    items = Referral.objects.select_related("patient", "patient__primary_name", "referring_doctor", "referring_doctor_reference")
     if request.GET.get("patient"): items = items.filter(patient_id=request.GET["patient"])
     return render(request, "referrals/list.html", {"page": Paginator(items, 30).get_page(request.GET.get("page"))})
 
@@ -38,4 +38,4 @@ def referral_edit(request, pk):
         log_audit(request, "update", "Referral", item.pk, str(item))
         messages.success(request, "تم تحديث الإحالة وبياناتها.")
         return redirect("referrals:list")
-    return render(request, "shared/form.html", {"form": form, "title": "تعديل الإحالة", "submit_label": "حفظ التعديلات"})
+    return render(request, "shared/form.html", {"form": form, "patient": item.patient, "title": "تعديل الإحالة", "submit_label": "حفظ التعديلات"})
