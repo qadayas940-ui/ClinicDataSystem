@@ -343,3 +343,33 @@ class BackupExportTests(TestCase):
 
             json_data = json.loads(self._download("backup:json_export").decode("utf-8"))
             self.assertEqual(json_data["المرضى"][0]["الرقم"], self.patient.internal_code)
+
+
+class ReleaseReadinessTests(TestCase):
+    def setUp(self):
+        self.role = Role.objects.create(name="مدقق جاهزية", code=Role.CODE_AUDITOR)
+        self.user = User.objects.create_user(username="readiness-auditor", password="StrongPass123", role=self.role)
+        self.client.force_login(self.user)
+
+    def test_language_switch_persists_arabic_and_english(self):
+        response = self.client.get(reverse("core:set_language", args=["ar"]))
+        self.assertEqual(response.cookies["django_language"].value, "ar")
+        self.assertEqual(self.client.session["django_language"], "ar")
+        response = self.client.get(reverse("core:set_language", args=["en"]))
+        self.assertEqual(response.cookies["django_language"].value, "en")
+
+    def test_patient_trash_restores_without_permanent_deletion(self):
+        patient = create_patient({"full_name": "مريض سلة قابل للاستعادة", "gender": "male", "approx_age_value": 22, "approx_age_unit": "year", "phone": "", "address": ""}, self.user)
+        patient.soft_delete()
+        response = self.client.get(reverse("patients:trash"))
+        self.assertContains(response, patient.internal_code)
+        response = self.client.post(reverse("patients:restore", args=[patient.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Patient.objects.filter(pk=patient.pk).exists())
+
+    def test_exports_are_grouped_in_named_data_folders(self):
+        with tempfile.TemporaryDirectory() as directory, override_settings(DATA_PATH=Path(directory)):
+            from apps.backup.services import create_excel_export, create_csv_export, create_json_export
+            self.assertEqual(create_excel_export().parent.name, "Excel")
+            self.assertEqual(create_csv_export().parent.name, "ZIP")
+            self.assertEqual(create_json_export().parent.name, "JSON")

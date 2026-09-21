@@ -63,8 +63,8 @@
 .progress-track i { background: linear-gradient(90deg, #2478b5, #42b7a4); border-radius: inherit; display: block; height: 100%; transition: width .35s ease; width: 1%; }
 .welcome-panel { align-items:center; background:linear-gradient(135deg,#123f70 0%,#1e6aa5 62%,#2a88b7 100%); border:1px solid #2f79ad; border-radius:16px; box-shadow:0 16px 34px rgba(18,63,112,.2); color:#fff; display:grid; gap:24px; grid-template-columns:minmax(260px,.8fr) minmax(480px,1.2fr); margin-bottom:24px; padding:27px 32px; }
 .welcome-panel .eyebrow,.welcome-panel p{color:#dcefff}.welcome-panel h1{color:#fff}.welcome-panel .dashboard-search{background:#fff}.welcome-panel .compact-action{background:#fff;color:#164f80}
-.welcome-panel h1 { color: #153b5b; font-size: 1.65rem; margin: 4px 0; }
-.welcome-panel p { color: var(--muted); margin: 0; }
+.welcome-panel h1 { color: #fff; font-size: 1.65rem; margin: 4px 0; text-shadow:0 1px 2px rgba(0,0,0,.16); }
+.welcome-panel p { color: #eef7ff; margin: 0; }
 .welcome-actions { align-items: center; display: flex; gap: 10px; justify-content: center; }
 .dashboard-search { border-radius: 8px; box-shadow: none; margin: 0; max-width: 520px; min-width: 360px; padding: 5px; width: 100%; }
 .compact-action { flex: 0 0 auto; min-height: 46px; white-space: nowrap; }

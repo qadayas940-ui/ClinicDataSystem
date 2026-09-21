@@ -32,8 +32,21 @@ User = get_user_model()
 @login_required
 def set_language(request, language):
     language = "en" if language == "en" else "ar"
+    from django.conf import settings
+    from django.utils import translation
+
+    translation.activate(language)
+    request.LANGUAGE_CODE = language
+    request.session["django_language"] = language
     response = redirect(request.GET.get("next") or request.META.get("HTTP_REFERER") or reverse("core:dashboard"))
-    response.set_cookie("django_language", language, max_age=365 * 24 * 60 * 60, samesite="Lax")
+    response.set_cookie(
+        settings.LANGUAGE_COOKIE_NAME, language,
+        max_age=365 * 24 * 60 * 60,
+        path=settings.LANGUAGE_COOKIE_PATH,
+        secure=settings.LANGUAGE_COOKIE_SECURE,
+        httponly=settings.LANGUAGE_COOKIE_HTTPONLY,
+        samesite=settings.LANGUAGE_COOKIE_SAMESITE,
+    )
     return response
 
 

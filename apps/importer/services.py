@@ -201,13 +201,13 @@ def _file_hash(path):
 
 
 def archive_upload(uploaded_file):
-    incoming = Path(settings.UPLOADS_DIR) / "imports" / "incoming"
+    incoming = Path(settings.DATA_PATH) / "Files" / "Imported" / "incoming"
     incoming.mkdir(parents=True, exist_ok=True)
     temp_path = incoming / f"upload-{timezone.now().strftime('%Y%m%d%H%M%S%f')}.xlsx"
     with temp_path.open("wb") as output:
         for chunk in uploaded_file.chunks(): output.write(chunk)
     digest = _file_hash(temp_path)
-    archive = Path(settings.UPLOADS_DIR) / "imports" / digest[:2]
+    archive = Path(settings.DATA_PATH) / "Files" / "Imported" / digest[:2]
     archive.mkdir(parents=True, exist_ok=True)
     final_path = archive / f"{digest}.xlsx"
     if final_path.exists():

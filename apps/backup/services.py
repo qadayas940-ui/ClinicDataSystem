@@ -29,8 +29,8 @@ def _stamp():
     return timezone.localtime().strftime("%Y%m%d-%H%M%S")
 
 
-def _export_dir():
-    path = Path(settings.DATA_PATH) / "exports"
+def _export_dir(kind):
+    path = Path(settings.DATA_PATH) / "Files" / kind
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -150,7 +150,7 @@ def _plain(value):
 
 
 def create_excel_export():
-    path = _export_dir() / f"ClinicData-export-{_stamp()}.xlsx"
+    path = _export_dir("Excel") / f"ClinicData-export-{_stamp()}.xlsx"
     book = Workbook(write_only=True)
     for title, headers, rows in _export_tables():
         sheet = book.create_sheet(title=title)
@@ -162,7 +162,7 @@ def create_excel_export():
 
 
 def create_csv_export():
-    path = _export_dir() / f"ClinicData-export-{_stamp()}.zip"
+    path = _export_dir("ZIP") / f"ClinicData-export-{_stamp()}.zip"
     with tempfile.TemporaryDirectory() as temporary:
         temporary_path = Path(temporary)
         with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -177,7 +177,7 @@ def create_csv_export():
 
 
 def create_json_export():
-    path = _export_dir() / f"ClinicData-export-{_stamp()}.json"
+    path = _export_dir("JSON") / f"ClinicData-export-{_stamp()}.json"
     payload = {}
     for title, headers, rows in _export_tables():
         payload[title] = [dict(zip(headers, [_plain(value) for value in row])) for row in rows]

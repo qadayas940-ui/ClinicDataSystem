@@ -90,7 +90,7 @@ def _setup_environment():
         sys.stderr = StringIO()
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.production")
     data_path = Path(cfg.DATA_PATH).expanduser().resolve()
-    for child in ("database", "uploads", "secrets", "logs", "backups"):
+    for child in ("database", "uploads", "secrets", "logs", "backups", "cache", "Files", "Files/Imported", "Files/Downloads", "Files/Excel", "Files/ZIP", "Files/JSON"):
         (data_path / child).mkdir(parents=True, exist_ok=True)
     secret_file = data_path / "secrets" / "secret.key"
     if not secret_file.exists():

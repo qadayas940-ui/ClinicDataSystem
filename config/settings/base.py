@@ -47,9 +47,16 @@ DATABASE_DIR = DATA_PATH / "database"
 UPLOADS_DIR = DATA_PATH / "uploads"
 SECRETS_DIR = DATA_PATH / "secrets"
 LOGS_DIR = DATA_PATH / "logs"
+CACHE_DIR = DATA_PATH / "cache"
+FILES_DIR = DATA_PATH / "Files"
+IMPORTS_DIR = FILES_DIR / "Imported"
+DOWNLOADS_DIR = FILES_DIR / "Downloads"
+EXCEL_EXPORTS_DIR = FILES_DIR / "Excel"
+ZIP_EXPORTS_DIR = FILES_DIR / "ZIP"
+JSON_EXPORTS_DIR = FILES_DIR / "JSON"
 
 # التأكد من وجود المجلدات
-for _d in (DATABASE_DIR, UPLOADS_DIR, SECRETS_DIR, LOGS_DIR):
+for _d in (DATABASE_DIR, UPLOADS_DIR, SECRETS_DIR, LOGS_DIR, CACHE_DIR, FILES_DIR, IMPORTS_DIR, DOWNLOADS_DIR, EXCEL_EXPORTS_DIR, ZIP_EXPORTS_DIR, JSON_EXPORTS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
@@ -229,13 +236,22 @@ SESSION_COOKIE_AGE = 28800  # 8 ساعات بالثواني
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = True
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": str(CACHE_DIR),
+        "TIMEOUT": 300,
+        "OPTIONS": {"MAX_ENTRIES": 2000},
+    }
+}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------
 # معلومات التطبيق
 # ---------------------------------------------------------------------------
 APP_NAME = "نظام إدارة بيانات ومرضى العيادة"
-APP_VERSION = "1.5.3"
+APP_VERSION = "1.5.4"
 DB_SCHEMA_VERSION = "3"
 FACILITY_NAME = config("FACILITY_NAME", default="عيادة الموصل الخيرية")
 UPDATE_MANIFEST_URL = config("UPDATE_MANIFEST_URL", default="")
