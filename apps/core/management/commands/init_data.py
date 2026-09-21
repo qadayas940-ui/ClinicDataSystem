@@ -101,7 +101,7 @@ class Command(BaseCommand):
                 },
             )
             if entry["category"] == "department":
-                code = "XLS-" + hashlib.sha1(entry["normalized_name"].encode("utf-8")).hexdigest()[:8].upper()
+                code = "XLS-" + hashlib.sha1(entry["normalized_name"].encode("utf-8"), usedforsecurity=False).hexdigest()[:8].upper()
                 department, _ = Department.all_objects.update_or_create(
                     code=code,
                     defaults={"name": item.canonical_name, "department_type": "clinic", "is_active": True, "deleted_at": None},

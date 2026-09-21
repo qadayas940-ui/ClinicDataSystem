@@ -138,7 +138,7 @@ def _sync_reference_values(index):
     for (category, normalized), data in index.items():
         if category != "department":
             continue
-        code = "XLS-" + hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:8].upper()
+        code = "XLS-" + hashlib.sha1(normalized.encode("utf-8"), usedforsecurity=False).hexdigest()[:8].upper()
         department, _ = Department.all_objects.update_or_create(
             code=code,
             defaults={"name": data["canonical_name"], "department_type": "clinic", "is_active": True, "deleted_at": None},

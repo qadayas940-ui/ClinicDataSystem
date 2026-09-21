@@ -280,13 +280,13 @@ def patient_qr(request, pk):
 
 @roles_required("data_auditor")
 def patient_trash(request):
-    patients = Patient.all_objects.dead().select_related("primary_name").prefetch_related("names", "contacts")
+    patients = Patient.all_objects.filter(deleted_at__isnull=False).select_related("primary_name").prefetch_related("names", "contacts")
     return render(request, "patients/trash.html", {"patients": patients[:250]})
 
 
 @roles_required("data_auditor")
 def patient_restore(request, pk):
-    patient = get_object_or_404(Patient.all_objects.dead(), pk=pk)
+    patient = get_object_or_404(Patient.all_objects.filter(deleted_at__isnull=False), pk=pk)
     if request.method == "POST":
         patient.restore()
         log_audit(request, "restore", "Patient", patient.pk, patient.internal_code)
