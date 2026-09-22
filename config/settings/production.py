@@ -1,5 +1,6 @@
 """إعدادات بيئة الإنتاج (النسخة التشغيلية عبر Waitress + pywebview)."""
 from django.core.exceptions import ImproperlyConfigured
+from urllib.parse import urlparse
 
 from .base import *
 
@@ -28,6 +29,14 @@ ALLOWED_HOSTS = config(
 if config("CLINIC_ALLOW_LAN", default=False, cast=bool):
     ALLOWED_HOSTS = ["*"]
 
+# اسم النطاق العام لا يُقبل إلا عند ضبط رابط HTTPS صريح.
+if PUBLIC_BASE_URL:
+    public_origin = urlparse(PUBLIC_BASE_URL)
+    if public_origin.scheme != "https" or not public_origin.hostname:
+        raise ImproperlyConfigured("PUBLIC_BASE_URL must be a complete https:// URL.")
+    if "*" not in ALLOWED_HOSTS and public_origin.hostname not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(public_origin.hostname)
+
 # تقوية الأمان
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
@@ -47,3 +56,5 @@ CSRF_TRUSTED_ORIGINS = config(
     "CSRF_TRUSTED_ORIGINS", default="",
     cast=lambda value: [item.strip() for item in value.split(",") if item.strip()],
 )
+if PUBLIC_BASE_URL and PUBLIC_BASE_URL not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(PUBLIC_BASE_URL)

@@ -41,3 +41,15 @@ class HealthCheckTests(TestCase):
         response = self.client.get(reverse("core:health_api"), HTTP_HOST="8.8.8.8:8765")
         self.assertEqual(response.status_code, 400)
         self.assertContains(response, "عنوان المضيف غير مسموح", status_code=400)
+
+
+class NetworkAccessTests(TestCase):
+    @override_settings(ALLOWED_HOSTS=["*"], PUBLIC_BASE_URL="https://clinic.example.org")
+    def test_configured_public_https_host_is_allowed(self):
+        response = self.client.get("/api/health/", HTTP_HOST="clinic.example.org")
+        self.assertIn(response.status_code, (200, 503))
+
+    @override_settings(ALLOWED_HOSTS=["*"], PUBLIC_BASE_URL="")
+    def test_unconfigured_public_host_is_rejected(self):
+        response = self.client.get("/api/health/", HTTP_HOST="attacker.example.org")
+        self.assertEqual(response.status_code, 400)

@@ -80,11 +80,11 @@ jobs:
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ClinicDataSystem.iss'
       - name: Verify versioned installer
         shell: pwsh
-        run: if (-not (Test-Path "release\\ClinicDataSystem-Setup-1.5.4.exe")) { throw "Expected versioned installer was not created." }
+        run: if (-not (Test-Path "release\\ClinicDataSystem-Setup-1.5.5.exe")) { throw "Expected versioned installer was not created." }
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClinicDataSystem-Windows-1.5.4
+          name: ClinicDataSystem-Windows-1.5.5
           path: release/*.exe
           if-no-files-found: error
       - name: Publish downloadable EXE
@@ -93,4 +93,4 @@ jobs:
           tag_name: windows-build-${{ github.run_number }}
           name: Windows build ${{ github.run_number }}
           prerelease: true
-          files: release/ClinicDataSystem-Setup-1.5.4.exe
+          files: release/ClinicDataSystem-Setup-1.5.5.exe

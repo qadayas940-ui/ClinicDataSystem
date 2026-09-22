@@ -232,15 +232,16 @@ def main():
 
         print(f"الخادم يعمل على {cfg.APP_URL}")
         if cfg.ALLOW_LAN:
-            import socket
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-                    sock.connect(("192.0.2.1", 80))
-                    network_ip = sock.getsockname()[0]
-            except OSError:
-                network_ip = "127.0.0.1"
-            lan_url = f"http://{network_ip}:{cfg.PORT}"
-            _write_startup_log(f"LAN access enabled. url={lan_url}")
+            from apps.core.network import discover_lan_addresses, preferred_lan_url
+            lan_url = preferred_lan_url(cfg.PORT)
+            lan_urls = [f"http://{address}:{cfg.PORT}" for address in discover_lan_addresses()]
+            _write_startup_log(f"LAN access enabled. preferred={lan_url}, candidates={lan_urls}")
+            share_file = Path(cfg.DATA_PATH).expanduser().resolve() / "Clinic-Network-Link.txt"
+            share_file.write_text(
+                "ClinicDataSystem LAN URL\n" + lan_url + "\n\n"
+                "Keep the server PC running and allow ClinicDataSystem through Windows Firewall.\n",
+                encoding="utf-8",
+            )
             print(f"رابط أجهزة العيادة: {lan_url}")
 
         if "--server" in sys.argv or os.environ.get("CLINIC_HEADLESS", "").lower() in {"1", "true", "yes"}:

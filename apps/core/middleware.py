@@ -11,6 +11,7 @@ from django.conf import settings
 from django.http import HttpResponseBadRequest
 from django.http.request import split_domain_port
 
+from .network import public_hostname
 from .utils import get_client_ip
 
 logger = logging.getLogger("clinic")
@@ -35,6 +36,9 @@ class PrivateNetworkHostMiddleware:
         if not host:
             return HttpResponseBadRequest("عنوان المضيف غير صالح.")
         configured_hosts = {item.lower() for item in settings.ALLOWED_HOSTS if item != "*"}
+        public_host = public_hostname(getattr(settings, "PUBLIC_BASE_URL", ""))
+        if public_host:
+            configured_hosts.add(public_host)
         if settings.DEBUG or host in {"localhost", "testserver"} or host in configured_hosts:
             return self.get_response(request)
         try:

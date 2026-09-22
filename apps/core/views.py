@@ -345,26 +345,9 @@ def department_restore(request, pk):
 
 
 def _local_ip():
-    candidates = []
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.connect(("192.0.2.1", 80))
-        candidates.append(sock.getsockname()[0])
-    except OSError:
-        pass
-    finally:
-        sock.close()
-    try:
-        candidates.extend(socket.gethostbyname_ex(socket.gethostname())[2])
-    except OSError:
-        pass
-    for candidate in candidates:
-        try:
-            if candidate != "127.0.0.1" and __import__("ipaddress").ip_address(candidate).is_private:
-                return candidate
-        except ValueError:
-            continue
-    return "127.0.0.1"
+    from .network import discover_lan_addresses
+    addresses = discover_lan_addresses()
+    return addresses[0] if addresses else "127.0.0.1"
 
 
 @owner_required
@@ -390,4 +373,12 @@ def server_settings(request):
             logger.warning("تعذر كتابة إعداد سطح المكتب: %s", exc)
         messages.success(request, "حُفظ الإعداد. أعد تشغيل التطبيق لتطبيق تغيير الشبكة أو المنفذ.")
         return redirect("core:server_settings")
-    return render(request, "core/server_settings.html", {"form": form, "server": server, "lan_url": f"http://{_local_ip()}:{server.port}"})
+    from .network import discover_lan_addresses
+    lan_addresses = discover_lan_addresses()
+    lan_urls = [f"http://{address}:{server.port}" for address in lan_addresses]
+    if not lan_urls:
+        lan_urls = [f"http://127.0.0.1:{server.port}"]
+    return render(request, "core/server_settings.html", {
+        "form": form, "server": server, "lan_url": lan_urls[0], "lan_urls": lan_urls,
+        "public_url": getattr(settings, "PUBLIC_BASE_URL", ""),
+    })
