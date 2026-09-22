@@ -1,3 +1,9 @@
+## 1.5.6
+
+- Added a production Render Blueprint with a private managed PostgreSQL database, persistent application storage, HTTPS-only cookies, health checks, and automatic deploys from `codex/v1-5-build`.
+- Accept Render's generated public HTTPS URL automatically while preserving an explicitly configured `PUBLIC_BASE_URL`.
+- Corrected the Windows D-drive build helper to use the supported release branch.
+
 # سجل التغييرات
 
 ## [1.4.0] — بطاقات الاستيراد الكاملة وزر الرجوع

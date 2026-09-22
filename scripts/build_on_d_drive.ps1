@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $BaseDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $RepoDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $RepoUrl = "https://github.com/qadayas940-ui/ClinicDataSystem.git"
-$Branch = "codex/v1-complete"
+$Branch = "codex/v1-5-build"
 $PythonLauncher = "py"
 
 Write-Host "== ClinicDataSystem build =="
@@ -72,7 +72,7 @@ if ($DesktopDir) {
 $IsccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 if (Test-Path $IsccPath) {
     & $IsccPath "installer\ClinicDataSystem.iss"
-    $SetupPath = Join-Path $RepoDir "release\ClinicDataSystem-Setup-1.5.5.exe"
+    $SetupPath = Join-Path $RepoDir "release\ClinicDataSystem-Setup-1.5.6.exe"
     if (Test-Path $SetupPath) {
         Write-Host "Installer ready:"
         Write-Host $SetupPath

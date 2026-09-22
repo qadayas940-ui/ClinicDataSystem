@@ -6,6 +6,10 @@ from .base import *
 
 DEBUG = False
 
+# Render provides this automatically for every public web service.
+# A manually configured PUBLIC_BASE_URL still takes precedence.
+PUBLIC_BASE_URL = PUBLIC_BASE_URL or config("RENDER_EXTERNAL_URL", default="").strip().rstrip("/")
+
 if not SECRET_KEY or SECRET_KEY == "clinic-development-only-secret":
     raise ImproperlyConfigured("يجب إنشاء SECRET_KEY آمن قبل تشغيل نسخة الإنتاج.")
 

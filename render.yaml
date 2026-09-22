@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: clinic-data-system
+    runtime: docker
+    repo: https://github.com/qadayas940-ui/ClinicDataSystem
+    branch: codex/v1-5-build
+    plan: 0.5c-512mb
+    region: frankfurt
+    autoDeployTrigger: checksPass
+    healthCheckPath: /api/health/
+    preDeployCommand: python manage.py migrate --noinput && python manage.py init_data
+    dockerCommand: /bin/sh -c 'python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-10000} --workers 3 --threads 2 --timeout 120 --access-logfile -'
+    disk:
+      name: clinic-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: clinic-data-postgres
+          property: connectionString
+      - key: DB_SSLMODE
+        value: require
+      - key: CLINIC_DATA_PATH
+        value: /data
+      - key: SECURE_SSL_REDIRECT
+        value: "true"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: CSRF_COOKIE_SECURE
+        value: "true"
+      - key: FACILITY_NAME
+        value: عيادة الموصل الخيرية
+
+databases:
+  - name: clinic-data-postgres
+    plan: 0.1c-256mb
+    region: frankfurt
+    postgresMajorVersion: "18"
+    databaseName: clinic_data
+    user: clinic_user
+    diskSizeGB: 15
+    ipAllowList: []
