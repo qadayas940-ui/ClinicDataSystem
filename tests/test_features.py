@@ -371,7 +371,7 @@ class BackupExportTests(TestCase):
                 self.assertIn("المرضى.csv", archive.namelist())
 
             json_data = json.loads(self._download("backup:json_export").decode("utf-8"))
-            self.assertEqual(json_data["المرضى"][0]["الرقم"], self.patient.internal_code)
+            self.assertEqual(json_data["المرضى"][0]["الرقم التعريفي الخاص بالمريض"], self.patient.internal_code)
 
 
 class ReleaseReadinessTests(TestCase):
