@@ -18,10 +18,14 @@ def visit_list(request):
     visits = Visit.objects.select_related(
         "patient", "patient__primary_name", "doctor", "department", "doctor_reference", "organizer_reference"
     ).prefetch_related("patient__visits")
+    patient = None
     if request.GET.get("patient"):
-        visits = visits.filter(patient_id=request.GET["patient"])
+        patient = get_object_or_404(Patient.objects.select_related("primary_name"), pk=request.GET["patient"])
+        visits = visits.filter(patient=patient)
+    ordering = request.GET.get("order", "newest")
+    visits = visits.order_by("visit_date", "pk") if ordering == "oldest" else visits.order_by("-visit_date", "-pk")
     page = Paginator(visits, 30).get_page(request.GET.get("page"))
-    return render(request, "visits/list.html", {"page": page})
+    return render(request, "visits/list.html", {"page": page, "current_patient": patient, "ordering": ordering})
 
 
 @roles_required("doctor", "organizer", "data_auditor")

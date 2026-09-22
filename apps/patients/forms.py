@@ -69,7 +69,12 @@ class PatientForm(forms.Form):
         empty_label="— اختر المنظّم —",
     )
     visit_date = forms.DateField(
-        label="التاريخ", required=False, widget=forms.DateInput(attrs={"type": "date"}),
+        label="تاريخ الزيارة", required=False, widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    visit_time = forms.TimeField(
+        label="وقت الزيارة", required=False,
+        widget=forms.TimeInput(format="%H:%M", attrs={"type": "time", "step": "60", "data-visit-time": "1"}),
+        help_text="يُحفظ الوقت الفعلي ويُعرض بنظام 12 ساعة AM / PM.",
     )
     diagnosis_reference = forms.ModelChoiceField(
         label="الحالة / التشخيص", queryset=ReferenceValue.objects.none(), required=False,
@@ -100,9 +105,11 @@ class PatientForm(forms.Form):
         else:
             doctors = doctors.none()
         self.fields["doctor_reference"].queryset = doctors.distinct()
-        self.fields["visit_date"].initial = self.fields["visit_date"].initial or timezone.localdate()
+        now = timezone.localtime()
+        self.fields["visit_date"].initial = self.fields["visit_date"].initial or now.date()
+        self.fields["visit_time"].initial = self.fields["visit_time"].initial or now.time().replace(second=0, microsecond=0)
         if require_complete:
-            for name in ("department", "doctor_reference", "organizer_reference", "visit_date"):
+            for name in ("department", "doctor_reference", "organizer_reference", "visit_date", "visit_time"):
                 self.fields[name].required = True
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
@@ -122,7 +129,7 @@ class PatientForm(forms.Form):
                 "full_name": "Full name", "gender": "Gender", "date_of_birth": "Date of birth",
                 "approx_age_value": "Approximate age", "approx_age_unit": "Age unit",
                 "phone": "Phone number", "address": "Area / address", "department": "Department",
-                "doctor_reference": "Doctor", "organizer_reference": "Organizer", "visit_date": "Date",
+                "doctor_reference": "Doctor", "organizer_reference": "Organizer", "visit_date": "Visit date", "visit_time": "Visit time",
                 "diagnosis_reference": "Status / diagnosis", "chief_complaint": "Reason / complaint",
                 "notes": "Notes",
             }

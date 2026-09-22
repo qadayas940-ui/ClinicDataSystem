@@ -1,3 +1,11 @@
+## 1.5.8 — 2026-09-22
+
+- واجهة تسجيل متجاوبة مطابقة للتصميم المعتمد مع إبقاء الشريط الجانبي الحالي.
+- زر تسجيل مريض جديد في الشريط العلوي ورفع وضوح البطاقات والألوان.
+- إزالة وقت الظهر الثابت وحفظ الوقت الفعلي وعرض AM / PM.
+- سجل زيارات كامل وإجراء رابع وترتيب الأحدث/الأقدم.
+- تسلسل Excel من الأقدم إلى الأحدث، وأوراق اختصاصات وبحث وتغييرات بدون ماكرو.
+
 ## 1.5.7
 
 - Made repeated startup responsive by running only pending migrations synchronously and moving import repair and daily backup to background maintenance.

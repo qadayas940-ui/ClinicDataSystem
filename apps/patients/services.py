@@ -92,17 +92,18 @@ def find_patient_candidates(*, name="", phone="", age=None, birth_date=None, gen
     return candidates[:limit]
 
 
-def _visit_datetime(value):
+def _visit_datetime(value, visit_time=None):
     value = value or timezone.localdate()
     if isinstance(value, datetime):
         return value if timezone.is_aware(value) else timezone.make_aware(value)
-    return timezone.make_aware(datetime.combine(value, time(hour=12)))
+    actual_time = visit_time or timezone.localtime().time().replace(second=0, microsecond=0)
+    return timezone.make_aware(datetime.combine(value, actual_time), timezone.get_current_timezone())
 
 
 def _visit_payload(cleaned_data):
     diagnosis = cleaned_data.get("diagnosis_reference")
     return {
-        "visit_date": _visit_datetime(cleaned_data.get("visit_date")),
+        "visit_date": _visit_datetime(cleaned_data.get("visit_date"), cleaned_data.get("visit_time")),
         "visit_type": cleaned_data.get("visit_type", "clinic"),
         "department": cleaned_data.get("department"),
         "doctor_reference": cleaned_data.get("doctor_reference"),
@@ -177,7 +178,7 @@ def create_patient(cleaned_data, user):
     address = (cleaned_data.get("address") or "").strip()
     if address:
         PatientAddress.objects.create(patient=patient, text=address, address_type="سكن")
-    if any(cleaned_data.get(key) for key in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference", "diagnosis", "chief_complaint", "notes", "visit_date")):
+    if any(cleaned_data.get(key) for key in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference", "diagnosis", "chief_complaint", "notes", "visit_date", "visit_time")):
         from apps.visits.models import Visit
 
         Visit.objects.create(patient=patient, created_by=user, **_visit_payload(cleaned_data))
@@ -221,7 +222,7 @@ def update_patient(patient, cleaned_data):
         PatientAddress.objects.create(patient=patient, text=address, address_type="سكن")
     elif current_address:
         current_address.soft_delete()
-    if any(cleaned_data.get(key) for key in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference", "diagnosis", "chief_complaint", "notes", "visit_date")):
+    if any(cleaned_data.get(key) for key in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference", "diagnosis", "chief_complaint", "notes", "visit_date", "visit_time")):
         from apps.visits.models import Visit
 
         visit = patient.visits.first()

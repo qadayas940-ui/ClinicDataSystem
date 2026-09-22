@@ -13,6 +13,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.utils import timezone
 from openpyxl import Workbook
+from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
@@ -121,11 +122,11 @@ def _export_tables():
 
     patients = Patient.objects.select_related("primary_name").prefetch_related(
         "contacts", "addresses", "visits__department", "visits__doctor_reference", "visits__organizer_reference"
-    )
+    ).order_by("created_at", "pk")
     patient_rows = []
     sequence = 0
     for patient in patients:
-        visits = list(patient.visits.all())
+        visits = list(patient.visits.order_by("visit_date", "pk"))
         if not visits:
             visits = [None]
         for visit in visits:
@@ -137,7 +138,7 @@ def _export_tables():
                 str(visit.department or "") if visit else "", visit.diagnosis if visit else "",
                 str(visit.doctor_reference or visit.doctor or "") if visit else "",
                 str(visit.organizer_reference or visit.organizer or "") if visit else "",
-                visit.visit_date.isoformat() if visit else "", visit.notes if visit else "",
+                timezone.localtime(visit.visit_date).strftime("%Y/%m/%d — %I:%M %p").lstrip("0") if visit else "", visit.notes if visit else "",
             ])
 
     lab_rows = []
@@ -179,30 +180,87 @@ def _plain(value):
     return str(value)
 
 
+def _style_excel_sheet(sheet, table_name=None):
+    sheet.sheet_view.rightToLeft = True
+    sheet.freeze_panes = "A2"
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="087F73")
+    if table_name and sheet.max_row >= 2:
+        table = Table(displayName=table_name, ref=f"A1:{sheet.cell(1, sheet.max_column).column_letter}{sheet.max_row}")
+        table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium4", showFirstColumn=False, showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+        sheet.add_table(table)
+    for column in sheet.columns:
+        sheet.column_dimensions[column[0].column_letter].width = min(45, max(12, max(len(str(cell.value or "")) for cell in column) + 2))
+
+
+def _safe_sheet_title(value, existing):
+    cleaned = "".join("_" if char in '[]:*?/\\\\' else char for char in str(value or "غير محدد")).strip()[:25]
+    base = f"قسم - {cleaned or 'غير محدد'}"
+    title, counter = base[:31], 2
+    while title in existing:
+        suffix = f"-{counter}"
+        title = base[:31-len(suffix)] + suffix
+        counter += 1
+    return title
+
+
 def create_excel_export():
     path = _export_dir("Excel") / f"ClinicData-export-{_stamp()}.xlsx"
     book = Workbook()
     book.remove(book.active)
-    for index, (title, headers, rows) in enumerate(_export_tables(), start=1):
+    exported = _export_tables()
+    for index, (title, headers, rows) in enumerate(exported, start=1):
         sheet = book.create_sheet(title=title)
-        sheet.sheet_view.rightToLeft = True
-        sheet.freeze_panes = "A2"
         sheet.append(headers)
-        for cell in sheet[1]:
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = PatternFill("solid", fgColor="1F4E78")
         for row in rows:
             sheet.append([_plain(value) for value in row])
-        if sheet.max_row >= 2:
-            table = Table(displayName=f"ClinicTable{index}", ref=f"A1:{sheet.cell(1, len(headers)).column_letter}{sheet.max_row}")
-            table.tableStyleInfo = TableStyleInfo(
-                name="TableStyleMedium2", showFirstColumn=False, showLastColumn=False,
-                showRowStripes=True, showColumnStripes=False,
-            )
-            sheet.add_table(table)
-        for column in sheet.columns:
-            width = min(45, max(12, max(len(str(cell.value or "")) for cell in column) + 2))
-            sheet.column_dimensions[column[0].column_letter].width = width
+        _style_excel_sheet(sheet, f"ClinicTable{index}")
+    patient_headers, patient_rows = exported[0][1], exported[0][2]
+    index_sheet = book.create_sheet("اختصاصات")
+    index_sheet.append(["الاختصاص", "عدد السجلات", "اسم الورقة"])
+    groups = {}
+    for row in patient_rows:
+        groups.setdefault(str(row[7] or "غير محدد"), []).append(row)
+    existing = set(book.sheetnames)
+    for number, (department, rows) in enumerate(sorted(groups.items()), start=1):
+        title = _safe_sheet_title(department, existing)
+        existing.add(title)
+        specialty = book.create_sheet(title)
+        specialty.append(patient_headers)
+        for row in rows:
+            specialty.append([_plain(value) for value in row])
+        _style_excel_sheet(specialty, f"SpecialtyTable{number}")
+        index_sheet.append([department, len(rows), title])
+        index_sheet.cell(index_sheet.max_row, 3).hyperlink = f"#'{title}'!A1"
+    _style_excel_sheet(index_sheet, "SpecialtiesIndex")
+    search = book.create_sheet("البحث")
+    search.sheet_view.rightToLeft = True
+    search["A1"] = "البحث عن مريض"
+    search["A1"].font = Font(bold=True, color="FFFFFF", size=16)
+    search["A1"].fill = PatternFill("solid", fgColor="062F50")
+    search.merge_cells("A1:F1")
+    search["A3"], search["B3"] = "اختر الاسم", ""
+    if patient_rows:
+        validation = DataValidation(type="list", formula1=f"'المرضى'!$C$2:$C${len(patient_rows)+1}", allow_blank=True)
+        search.add_data_validation(validation)
+        validation.add(search["B3"])
+    labels = [("A5","الرقم التعريفي","B5","B"),("C5","الجنس","D5","D"),("E5","العمر","F5","E"),("A7","العنوان","B7","F"),("C7","رقم الهاتف","D7","G"),("E7","القسم","F7","H"),("A9","الحالة","B9","I"),("C9","اسم الطبيب","D9","J"),("E9","التاريخ","F9","L")]
+    for label_cell, label, value_cell, source_col in labels:
+        search[label_cell] = label
+        search[label_cell].font = Font(bold=True, color="062F50")
+        search[value_cell] = f'=IFERROR(INDEX(المرضى!${source_col}:${source_col},MATCH($B$3,المرضى!$C:$C,0)),"")'
+    search["A12"] = "جميع زيارات الاسم المختار (Excel 365)"
+    search["A13"] = '=IF($B$3="","",_xlfn._xlws.FILTER(المرضى!A:M,المرضى!C:C=$B$3,"لا توجد زيارات"))'
+    for column, width in {"A":22,"B":28,"C":18,"D":24,"E":18,"F":28}.items():
+        search.column_dimensions[column].width = width
+    changes = book.create_sheet("التغييرات")
+    changes.append(["العملية","الرقم التعريفي","الاسم","القسم","التاريخ","الملاحظات"])
+    changes.append(["","","","","","تُراجع عبر شاشة الاستيراد قبل الدمج؛ لا تُستبدل قاعدة البيانات مباشرة."])
+    operation_validation = DataValidation(type="list", formula1='"إضافة,تعديل,أرشفة"', allow_blank=True)
+    changes.add_data_validation(operation_validation)
+    operation_validation.add("A2:A5000")
+    _style_excel_sheet(changes, "ChangesTable")
     book.save(path)
     return path
 

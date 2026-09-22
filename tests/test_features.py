@@ -402,3 +402,38 @@ class ReleaseReadinessTests(TestCase):
             self.assertEqual(create_excel_export().parent.name, "Excel")
             self.assertEqual(create_csv_export().parent.name, "ZIP")
             self.assertEqual(create_json_export().parent.name, "JSON")
+
+
+class ApprovedInterfaceAndExportTests(TestCase):
+    def setUp(self):
+        self.role = Role.objects.create(name="المنظم", code=Role.CODE_ORGANIZER)
+        self.user = User.objects.create_user(username="approved-ui", password="StrongPass123", role=self.role)
+
+    def test_patient_visit_keeps_selected_real_time(self):
+        patient = create_patient({"full_name":"اختبار وقت فعلي","gender":"male","date_of_birth":None,"approx_age_value":30,"approx_age_unit":"year","phone":"","address":"","visit_date":timezone.localdate(),"visit_time":timezone.datetime.strptime("19:00","%H:%M").time(),"notes":"زيارة مسائية"}, self.user)
+        local_visit = timezone.localtime(patient.visits.get().visit_date)
+        self.assertEqual((local_visit.hour, local_visit.minute), (19, 0))
+
+    def test_topbar_has_approved_new_patient_action(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("patients:list"))
+        self.assertContains(response, "top-new-patient")
+        self.assertContains(response, "تسجيل مريض جديد")
+
+    def test_history_has_twelve_hour_time_and_fourth_action(self):
+        patient = create_patient({"full_name":"مريض سجل الزيارات","gender":"female","date_of_birth":None,"approx_age_value":25,"approx_age_unit":"year","phone":"","address":"","visit_date":timezone.localdate(),"visit_time":timezone.datetime.strptime("19:00","%H:%M").time(),"notes":"اختبار"}, self.user)
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("visits:list"), {"patient": patient.pk})
+        self.assertContains(response, "7:00 PM")
+        self.assertContains(response, "سجل الزيارات")
+
+    def test_macro_free_excel_has_search_changes_and_oldest_first(self):
+        first = create_patient({"full_name":"المريض الأول","gender":"male","date_of_birth":None,"approx_age_value":20,"approx_age_unit":"year","phone":"","address":""}, self.user)
+        create_patient({"full_name":"المريض الثاني","gender":"female","date_of_birth":None,"approx_age_value":21,"approx_age_unit":"year","phone":"","address":""}, self.user)
+        with tempfile.TemporaryDirectory() as directory, override_settings(DATA_PATH=Path(directory)):
+            from apps.backup.services import create_excel_export
+            path = create_excel_export()
+            book = load_workbook(path, data_only=False)
+            self.assertEqual(path.suffix, ".xlsx")
+            self.assertTrue({"المرضى","المختبر","الإحالات","اختصاصات","البحث","التغييرات"}.issubset(book.sheetnames))
+            self.assertEqual(book["المرضى"]["B2"].value, first.internal_code)

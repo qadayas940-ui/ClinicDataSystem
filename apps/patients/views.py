@@ -166,7 +166,8 @@ def _patient_initial(patient):
         "department": visit.department_id if visit else None,
         "doctor_reference": visit.doctor_reference_id if visit else None,
         "organizer_reference": visit.organizer_reference_id if visit else None,
-        "visit_date": visit.visit_date.date() if visit else None,
+        "visit_date": timezone.localtime(visit.visit_date).date() if visit else None,
+        "visit_time": timezone.localtime(visit.visit_date).time().replace(second=0, microsecond=0) if visit else None,
         "diagnosis_reference": diagnosis.pk if diagnosis else None,
         "chief_complaint": visit.chief_complaint if visit else "",
         "notes": visit.notes if visit else "",
@@ -231,14 +232,14 @@ def patient_create(request):
         if candidates and request.POST.get("duplicate_override") != "1":
             return render(request, "shared/form.html", {
                 "form": form, "title": "تسجيل مريض جديد", "submit_label": "حفظ ملف المريض",
-                "duplicate_candidates": candidates,
+                "duplicate_candidates": candidates, "patient_form": True,
             })
         patient = create_patient(form.cleaned_data, request.user)
         log_audit(request, "create", "Patient", patient.pk, patient.internal_code)
         Notification.objects.create(user=request.user, event_type="patient_created", title="تم تسجيل مريض جديد", message=patient.internal_code, object_type="Patient", object_id=str(patient.pk), target_url=reverse("patients:list") + f"?patient={patient.pk}")
         messages.success(request, f"تم إنشاء ملف المريض بالرقم {patient.internal_code}.")
         return redirect("patients:detail", pk=patient.pk)
-    return render(request, "shared/form.html", {"form": form, "title": "تسجيل مريض جديد", "submit_label": "حفظ ملف المريض"})
+    return render(request, "shared/form.html", {"form": form, "title": "تسجيل مريض جديد", "submit_label": "تسجيل مريض جديد", "patient_form": True})
 
 
 @login_required
@@ -258,7 +259,7 @@ def patient_edit(request, pk):
         log_audit(request, "update", "Patient", patient.pk, patient.internal_code)
         messages.success(request, "تم تحديث ملف المريض مع حفظ العملية في سجل التدقيق.")
         return redirect("patients:detail", pk=patient.pk)
-    return render(request, "shared/form.html", {"form": form, "title": f"تعديل {patient.internal_code}", "submit_label": "حفظ التعديلات"})
+    return render(request, "shared/form.html", {"form": form, "title": f"تعديل {patient.internal_code}", "submit_label": "حفظ التعديلات", "patient_form": True})
 
 
 @roles_required("data_auditor")
