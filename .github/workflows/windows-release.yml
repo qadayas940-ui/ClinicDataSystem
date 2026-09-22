@@ -74,17 +74,24 @@ jobs:
           python manage.py check
           python manage.py makemigrations --check --dry-run
           python manage.py test
+      - name: Read application version
+        id: version
+        shell: pwsh
+        run: |
+          $match = Select-String -Path "config/settings/base.py" -Pattern 'APP_VERSION = "([^"]+)"'
+          if (-not $match) { throw "APP_VERSION was not found." }
+          "value=$($match.Matches[0].Groups[1].Value)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
       - name: Build desktop bundle
         run: pyinstaller --clean --noconfirm ClinicDataSystem.spec
       - name: Build installer
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ClinicDataSystem.iss'
       - name: Verify versioned installer
         shell: pwsh
-        run: if (-not (Test-Path "release\\ClinicDataSystem-Setup-1.5.5.exe")) { throw "Expected versioned installer was not created." }
+        run: if (-not (Test-Path "release\\ClinicDataSystem-Setup-${{ steps.version.outputs.value }}.exe")) { throw "Expected versioned installer was not created." }
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClinicDataSystem-Windows-1.5.5
+          name: ClinicDataSystem-Windows-${{ steps.version.outputs.value }}
           path: release/*.exe
           if-no-files-found: error
       - name: Publish downloadable EXE
@@ -93,4 +100,4 @@ jobs:
           tag_name: windows-build-${{ github.run_number }}
           name: Windows build ${{ github.run_number }}
           prerelease: true
-          files: release/ClinicDataSystem-Setup-1.5.5.exe
+          files: release/ClinicDataSystem-Setup-${{ steps.version.outputs.value }}.exe
