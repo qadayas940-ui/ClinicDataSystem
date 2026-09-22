@@ -1,5 +1,6 @@
 """وسوم قوالب مخصصة لنظام العيادة."""
 from django import template
+from django.utils import timezone
 
 register = template.Library()
 
@@ -32,3 +33,14 @@ def status_badge(status):
         "pending": "secondary",
     }
     return mapping.get(str(status).lower(), "secondary")
+
+
+@register.filter(name="english_visit_datetime")
+def english_visit_datetime(value):
+    """اعرض تاريخ الزيارة بصيغة 12 ساعة مع AM/PM إنجليزية مهما كانت لغة الواجهة."""
+    if not value:
+        return "—"
+    local_value = timezone.localtime(value) if timezone.is_aware(value) else value
+    hour = local_value.hour % 12 or 12
+    period = "AM" if local_value.hour < 12 else "PM"
+    return f"{local_value:%Y/%m/%d} — {hour}:{local_value.minute:02d} {period}"
