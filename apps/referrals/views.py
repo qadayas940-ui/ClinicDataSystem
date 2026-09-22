@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from apps.core.utils import log_audit, roles_required
 from apps.patients.models import Patient
@@ -39,3 +40,23 @@ def referral_edit(request, pk):
         messages.success(request, "تم تحديث الإحالة وبياناتها.")
         return redirect("referrals:list")
     return render(request, "shared/form.html", {"form": form, "patient": item.patient, "title": "تعديل الإحالة", "submit_label": "حفظ التعديلات"})
+
+
+@roles_required("data_auditor")
+@require_POST
+def archive(request, pk):
+    item = get_object_or_404(Referral, pk=pk)
+    item.soft_delete()
+    log_audit(request, "delete", "Referral", item.pk, str(item))
+    messages.success(request, "الإحالة نُقل إلى سلة المحذوفات.")
+    return redirect("referrals:list")
+
+
+@roles_required("data_auditor")
+@require_POST
+def restore(request, pk):
+    item = get_object_or_404(Referral.all_objects, pk=pk, deleted_at__isnull=False)
+    item.restore()
+    log_audit(request, "restore", "Referral", item.pk, str(item))
+    messages.success(request, "تمت استعادة السجل.")
+    return redirect("patients:trash")

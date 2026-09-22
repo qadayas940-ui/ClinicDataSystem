@@ -1,5 +1,5 @@
 #define MyAppName "ClinicDataSystem"
-#define MyAppVersion "1.5.6"
+#define MyAppVersion "1.5.7"
 #define MyAppPublisher "ClinicDataSystem"
 #define MyAppExeName "ClinicDataSystem.exe"
 

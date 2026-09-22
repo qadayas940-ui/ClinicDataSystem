@@ -28,9 +28,9 @@ def normalize_iraqi_mobile(value):
 
 class PatientForm(forms.Form):
     full_name = forms.CharField(
-        label="الاسم الرباعي",
+        label="اسم المريض",
         max_length=255,
-        help_text="اكتب أربعة أسماء على الأقل. مثال: أحمد محمد علي حسين.",
+        help_text="اكتب اسمين على الأقل؛ سيبحث النظام تلقائياً عن السجلات الأقرب.",
     )
     gender = forms.ChoiceField(label="الجنس", choices=Patient.GENDER_CHOICES)
     date_of_birth = forms.DateField(
@@ -55,10 +55,10 @@ class PatientForm(forms.Form):
     phone = forms.CharField(
         label="رقم الهاتف",
         max_length=40,
-        required=True,
-        help_text="يقبل 07899189225 أو +9647899189225 ويحفظه موحداً بصيغة +964.",
+        required=False,
+        help_text="اختياري. يقبل 07899189225 أو +9647899189225 ويحفظه موحداً بصيغة +964.",
     )
-    address = forms.CharField(label="منطقة السكن / العنوان", max_length=500, required=True)
+    address = forms.CharField(label="منطقة السكن / العنوان", max_length=500, required=False)
     department = forms.ModelChoiceField(label="القسم", queryset=Department.objects.none(), required=False)
     doctor_reference = forms.ModelChoiceField(
         label="اسم الطبيب", queryset=ReferenceValue.objects.none(), required=False,
@@ -101,10 +101,8 @@ class PatientForm(forms.Form):
             doctors = doctors.none()
         self.fields["doctor_reference"].queryset = doctors.distinct()
         self.fields["visit_date"].initial = self.fields["visit_date"].initial or timezone.localdate()
-        self.fields["phone"].required = require_complete
-        self.fields["address"].required = require_complete
         if require_complete:
-            for name in ("department", "doctor_reference", "organizer_reference", "visit_date", "diagnosis_reference"):
+            for name in ("department", "doctor_reference", "organizer_reference", "visit_date"):
                 self.fields[name].required = True
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
@@ -146,8 +144,8 @@ class PatientForm(forms.Form):
             else:
                 units.append(parts[index])
                 index += 1
-        if self.require_complete and len(units) < 4:
-            raise forms.ValidationError("الاسم يجب أن يكون رباعياً على الأقل. الاسم الثنائي أو الثلاثي يحتاج إكمال.")
+        if self.require_complete and len(units) < 2:
+            raise forms.ValidationError("اكتب اسمين على الأقل للبحث والتسجيل.")
         if re.search(r"[0-9٠-٩]", value):
             raise forms.ValidationError("الاسم لا يجب أن يحتوي أرقاماً.")
         return value

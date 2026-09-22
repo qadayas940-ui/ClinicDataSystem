@@ -8,4 +8,6 @@ urlpatterns = [
     path("new/", views.visit_create, name="create"),
     path("new/<uuid:patient_id>/", views.visit_create, name="create_for_patient"),
     path("<int:pk>/edit/", views.visit_edit, name="edit"),
+    path("<int:pk>/archive/", views.archive, name="archive"),
+    path("<int:pk>/restore/", views.restore, name="restore"),
 ]

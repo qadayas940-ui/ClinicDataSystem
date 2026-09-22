@@ -1,3 +1,11 @@
+## 1.5.7
+
+- Made repeated startup responsive by running only pending migrations synchronously and moving import repair and daily backup to background maintenance.
+- Rebuilt Excel exports with patient names instead of database IDs, the requested Arabic column order, native Excel tables, filters, sorting, frozen headers, and right-to-left worksheets.
+- Made phone, address, and diagnosis optional; accepted two-part names; and added a read-only live calculated-age field next to date of birth.
+- Exposed safe soft-delete and restore actions for patients, visits, laboratory orders, referrals, and eye-clinic visits through the unified trash.
+- Kept new manual records and old imported batches separate so they can be reviewed and merged later inside the same application.
+
 ## 1.5.6
 
 - Added a production Render Blueprint with a private managed PostgreSQL database, persistent application storage, HTTPS-only cookies, health checks, and automatic deploys from `codex/v1-5-build`.

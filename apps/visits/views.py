@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from apps.core.models import Notification
 from apps.core.utils import log_audit, roles_required
@@ -57,3 +58,23 @@ def visit_create(request, patient_id=None):
         messages.success(request, "تم تسجيل الزيارة وربطها بملف المريض.")
         return redirect("patients:detail", pk=visit.patient_id)
     return render(request, "shared/form.html", {"form": form, "patient": patient, "title": "تسجيل زيارة", "submit_label": "حفظ الزيارة"})
+
+
+@roles_required("data_auditor")
+@require_POST
+def archive(request, pk):
+    item = get_object_or_404(Visit, pk=pk)
+    item.soft_delete()
+    log_audit(request, "delete", "Visit", item.pk, str(item))
+    messages.success(request, "الزيارة نُقل إلى سلة المحذوفات.")
+    return redirect("visits:list")
+
+
+@roles_required("data_auditor")
+@require_POST
+def restore(request, pk):
+    item = get_object_or_404(Visit.all_objects, pk=pk, deleted_at__isnull=False)
+    item.restore()
+    log_audit(request, "restore", "Visit", item.pk, str(item))
+    messages.success(request, "تمت استعادة السجل.")
+    return redirect("patients:trash")

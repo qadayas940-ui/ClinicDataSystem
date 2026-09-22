@@ -17,15 +17,19 @@
     root.querySelectorAll("[data-birthdate]").forEach(function (input) {
       if (input.dataset.ready) return;
       input.dataset.ready = "1";
-      var hint = document.createElement("small");
-      hint.className = "help-text calculated-age";
-      input.insertAdjacentElement("afterend", hint);
       var scope = input.closest("form") || root;
       var ageField = scope.querySelector('[data-field="approx_age_value"]');
       var unitField = scope.querySelector('[data-field="approx_age_unit"]');
       var ageOutput = scope.querySelector("[data-calculated-age]");
+      if (!ageOutput) {
+        var ageBox = document.createElement("div");
+        ageBox.className = "field calculated-age-field";
+        ageBox.innerHTML = '<label>العمر الفعلي</label><input class="form-control" data-calculated-age readonly aria-readonly="true"><small class="help-text">يُحسب تلقائياً ولا يمكن تعديله</small>';
+        var birthField = input.closest('[data-field="date_of_birth"]') || input.parentElement;
+        birthField.insertAdjacentElement("afterend", ageBox);
+        ageOutput = ageBox.querySelector("[data-calculated-age]");
+      }
       function update() {
-        hint.textContent = ageText(input.value);
         if (ageOutput && input.value) ageOutput.value = ageText(input.value).replace("العمر المحسوب: ", "");
         if (ageOutput && !input.value) {
           var approximate = ageField && ageField.querySelector("input");

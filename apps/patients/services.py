@@ -210,6 +210,8 @@ def update_patient(patient, cleaned_data):
         contact.save(update_fields=["value", "updated_at"])
     elif phone:
         PatientContact.objects.create(patient=patient, value=phone, contact_type="mobile", is_primary=True)
+    elif contact:
+        contact.soft_delete()
     address = (cleaned_data.get("address") or "").strip()
     current_address = patient.addresses.first()
     if address and current_address:
@@ -217,6 +219,8 @@ def update_patient(patient, cleaned_data):
         current_address.save(update_fields=["text", "updated_at"])
     elif address:
         PatientAddress.objects.create(patient=patient, text=address, address_type="سكن")
+    elif current_address:
+        current_address.soft_delete()
     if any(cleaned_data.get(key) for key in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference", "diagnosis", "chief_complaint", "notes", "visit_date")):
         from apps.visits.models import Visit
 

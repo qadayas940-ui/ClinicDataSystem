@@ -110,36 +110,58 @@ def _setup_environment():
 
 
 def _run_migrations():
-    """تطبيق ترحيلات قاعدة البيانات (إنشاؤها عند أول تشغيل)."""
+    """Run only blocking first-run/update work before opening the server."""
     import django
     from django.core.management import call_command
 
     django.setup()
     from django.conf import settings
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
 
+    command_output = StringIO()
+    executor = MigrationExecutor(connection)
+    pending = executor.migration_plan(executor.loader.graph.leaf_nodes())
     is_sqlite = settings.DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3"
     db_path = Path(settings.DATABASES["default"]["NAME"]) if is_sqlite else None
-    if db_path and db_path.exists() and db_path.stat().st_size:
+    if pending and db_path and db_path.exists() and db_path.stat().st_size:
         destination = Path(settings.DATA_PATH) / "backups" / "pre_update"
         destination.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(datetime_timezone.utc).strftime("%Y%m%d-%H%M%S")
         shutil.copy2(db_path, destination / f"clinic-before-update-{stamp}.db")
-    command_output = StringIO()
-    call_command("migrate", interactive=False, verbosity=1, stdout=command_output, stderr=command_output)
-    call_command("init_data", verbosity=0, stdout=command_output, stderr=command_output)
-    call_command("repair_imported_data", "--incomplete", verbosity=0, stdout=command_output, stderr=command_output)
-    call_command("collectstatic", interactive=False, verbosity=0, stdout=command_output, stderr=command_output)
-    from datetime import timedelta
+    if pending:
+        call_command("migrate", interactive=False, verbosity=1, stdout=command_output, stderr=command_output)
 
-    from django.utils import timezone
-
-    from apps.core.models import BackupHistory
-
-    if is_sqlite and not BackupHistory.objects.filter(status="success", created_at__gte=timezone.now() - timedelta(days=1)).exists():
-        call_command("create_backup", automatic=True, verbosity=0, stdout=command_output, stderr=command_output)
+    marker = Path(settings.DATA_PATH) / "secrets" / f"prepared-{settings.APP_VERSION}.ok"
+    if not marker.exists():
+        call_command("init_data", verbosity=0, stdout=command_output, stderr=command_output)
+        call_command("collectstatic", interactive=False, verbosity=0, stdout=command_output, stderr=command_output)
+        marker.write_text(datetime.now(datetime_timezone.utc).isoformat(), encoding="utf-8")
     output = command_output.getvalue().strip()
     if output:
         _write_startup_log(output)
+
+
+def _run_background_maintenance():
+    """Repair unfinished imports and create the daily backup without blocking the UI."""
+    from datetime import timedelta
+    from django.core.management import call_command
+    from django.db import close_old_connections
+    from django.utils import timezone
+    from apps.core.models import BackupHistory
+
+    close_old_connections()
+    output = StringIO()
+    try:
+        call_command("repair_imported_data", "--incomplete", verbosity=0, stdout=output, stderr=output)
+        if not BackupHistory.objects.filter(status="success", created_at__gte=timezone.now() - timedelta(days=1)).exists():
+            call_command("create_backup", automatic=True, verbosity=0, stdout=output, stderr=output)
+    except Exception as exc:
+        _write_startup_log(f"Background maintenance warning: {exc}\n{traceback.format_exc()}")
+    finally:
+        close_old_connections()
+    if output.getvalue().strip():
+        _write_startup_log(output.getvalue().strip())
 
 
 def _start_server(holder):
@@ -231,6 +253,7 @@ def main():
             sys.exit(1)
 
         print(f"الخادم يعمل على {cfg.APP_URL}")
+        threading.Thread(target=_run_background_maintenance, name="clinic-maintenance", daemon=True).start()
         if cfg.ALLOW_LAN:
             from apps.core.network import discover_lan_addresses, preferred_lan_url
             lan_url = preferred_lan_url(cfg.PORT)

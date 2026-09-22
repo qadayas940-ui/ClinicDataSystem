@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Max, Prefetch, Q
 from django.http import HttpResponse, JsonResponse
+from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -207,7 +208,7 @@ def patient_drawer(request, pk):
                 "phone": patient.contacts.filter(is_primary=True).values_list("value", flat=True).first() or "—",
             },
         })
-    html = render_to_string("patients/_drawer.html", {"patient": patient, "form": form, "can_edit": can_edit}, request=request)
+    html = render_to_string("patients/_drawer.html", {"patient": patient, "form": form, "can_edit": can_edit, "can_archive": bool(request.user.is_owner or request.user.is_auditor)}, request=request)
     return HttpResponse(html, status=422 if request.method == "POST" else 200)
 
 
@@ -244,7 +245,7 @@ def patient_create(request):
 def patient_detail(request, pk):
     patient = get_object_or_404(Patient.objects.select_related("primary_name"), pk=pk)
     log_audit(request, "view", "Patient", patient.pk, patient.internal_code)
-    return render(request, "patients/detail.html", {"patient": patient})
+    return render(request, "patients/detail.html", {"patient": patient, "can_archive": bool(request.user.is_owner or request.user.is_auditor)})
 
 
 @roles_required("organizer", "data_auditor")
@@ -261,6 +262,7 @@ def patient_edit(request, pk):
 
 
 @roles_required("data_auditor")
+@require_POST
 def patient_archive(request, pk):
     patient = get_object_or_404(Patient, pk=pk)
     if request.method == "POST":
@@ -280,8 +282,19 @@ def patient_qr(request, pk):
 
 @roles_required("data_auditor")
 def patient_trash(request):
+    from apps.laboratory.models import LabOrder
+    from apps.ophthalmology.models import EyeClinicVisit
+    from apps.referrals.models import Referral
+    from apps.visits.models import Visit
+
     patients = Patient.all_objects.filter(deleted_at__isnull=False).select_related("primary_name").prefetch_related("names", "contacts")
-    return render(request, "patients/trash.html", {"patients": patients[:250]})
+    return render(request, "patients/trash.html", {
+        "patients": patients[:250],
+        "archived_visits": Visit.all_objects.filter(deleted_at__isnull=False).select_related("patient", "patient__primary_name")[:100],
+        "archived_labs": LabOrder.all_objects.filter(deleted_at__isnull=False).select_related("patient", "patient__primary_name")[:100],
+        "archived_referrals": Referral.all_objects.filter(deleted_at__isnull=False).select_related("patient", "patient__primary_name")[:100],
+        "archived_eye_visits": EyeClinicVisit.all_objects.filter(deleted_at__isnull=False).select_related("patient", "patient__primary_name")[:100],
+    })
 
 
 @roles_required("data_auditor")

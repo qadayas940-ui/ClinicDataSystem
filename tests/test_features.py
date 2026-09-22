@@ -64,6 +64,20 @@ class PatientWorkflowTests(TestCase):
         self.assertEqual(response.json()["results"][0]["id"], str(imported.pk))
         self.assertEqual(response.json()["results"][0]["source"], "مستورد")
 
+    def test_registration_allows_two_names_and_optional_contact_address_diagnosis(self):
+        form = PatientForm(data={
+            "full_name": "علي حسن", "gender": "male",
+            "approx_age_value": "30", "approx_age_unit": "year",
+            "phone": "", "address": "", "diagnosis_reference": "",
+            "department": "", "doctor_reference": "", "organizer_reference": "",
+            "visit_date": timezone.localdate().isoformat(),
+        }, require_complete=True)
+        form.is_valid()
+        self.assertNotIn("full_name", form.errors)
+        self.assertNotIn("phone", form.errors)
+        self.assertNotIn("address", form.errors)
+        self.assertNotIn("diagnosis_reference", form.errors)
+
     def test_doctor_choices_depend_on_department(self):
         women = Department.objects.create(name="نسائية", code="WOMEN")
         children = Department.objects.create(name="اطفال", code="CHILDREN")
@@ -328,6 +342,21 @@ class BackupExportTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("attachment", response["Content-Disposition"])
         return b"".join(response.streaming_content)
+
+    def test_excel_export_uses_requested_names_columns_and_filterable_tables(self):
+        with tempfile.TemporaryDirectory() as directory, override_settings(DATA_PATH=Path(directory)):
+            excel = self._download("backup:excel_export")
+            workbook = load_workbook(io.BytesIO(excel))
+            patients = workbook["المرضى"]
+            self.assertEqual([cell.value for cell in patients[1]], [
+                "ت", "الرقم التعريفي الخاص بالمريض", "الاسم", "الجنس", "العمر", "العنوان",
+                "رقم الهاتف", "القسم", "الحالة", "اسم الطبيب", "اسم المنظم", "التاريخ", "الملاحظات",
+            ])
+            self.assertEqual(patients["B2"].value, self.patient.internal_code)
+            self.assertEqual(patients["C2"].value, self.patient.display_name)
+            self.assertTrue(patients.tables)
+            self.assertTrue(workbook["المختبر"].tables or workbook["المختبر"].max_row == 1)
+            workbook.close()
 
     def test_excel_csv_and_json_are_real_downloads(self):
         with tempfile.TemporaryDirectory() as directory, override_settings(DATA_PATH=Path(directory)):

@@ -13,6 +13,8 @@ from django.core.management import call_command
 from django.db import connection
 from django.utils import timezone
 from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from apps.core.models import BackupHistory
 
@@ -116,28 +118,56 @@ def _export_tables():
     from apps.ophthalmology.models import EyeClinicVisit
     from apps.patients.models import Patient
     from apps.referrals.models import Referral
-    from apps.visits.models import Visit
 
-    patients = Patient.objects.select_related("primary_name").prefetch_related("contacts", "addresses", "visits")
-    visits = Visit.objects.select_related("patient", "department", "doctor", "doctor_reference", "organizer", "organizer_reference")
+    patients = Patient.objects.select_related("primary_name").prefetch_related(
+        "contacts", "addresses", "visits__department", "visits__doctor_reference", "visits__organizer_reference"
+    )
+    patient_rows = []
+    sequence = 0
+    for patient in patients:
+        visits = list(patient.visits.all())
+        if not visits:
+            visits = [None]
+        for visit in visits:
+            sequence += 1
+            patient_rows.append([
+                sequence, patient.internal_code, patient.display_name, patient.get_gender_display(),
+                patient.calculated_age, patient.addresses.values_list("text", flat=True).first() or "",
+                patient.contacts.values_list("value", flat=True).first() or "",
+                str(visit.department or "") if visit else "", visit.diagnosis if visit else "",
+                str(visit.doctor_reference or visit.doctor or "") if visit else "",
+                str(visit.organizer_reference or visit.organizer or "") if visit else "",
+                visit.visit_date.isoformat() if visit else "", visit.notes if visit else "",
+            ])
+
+    lab_rows = []
+    for order in LabOrder.objects.select_related("patient", "patient__primary_name").prefetch_related("tests"):
+        tests = list(order.tests.all()) or [None]
+        for test in tests:
+            lab_rows.append([
+                len(lab_rows) + 1, order.patient.internal_code, order.patient.display_name,
+                order.patient.calculated_age, test.test_name if test else "",
+            ])
+
+    referral_rows = [
+        [index, item.patient.internal_code, item.patient.display_name, item.destination_name]
+        for index, item in enumerate(
+            Referral.objects.select_related("patient", "patient__primary_name"), start=1
+        )
+    ]
+    eye_rows = [
+        [index, item.patient.internal_code, item.patient.display_name, item.patient.calculated_age,
+         item.diagnosis, item.notes]
+        for index, item in enumerate(
+            EyeClinicVisit.objects.select_related("patient", "patient__primary_name"), start=1
+        )
+    ]
     return [
-        ("المرضى", ["الرقم", "الاسم", "الجنس", "تاريخ الميلاد", "العمر", "الهاتف", "العنوان", "المصدر", "المعرف الخارجي", "عدد المراجعات"],
-         ([p.internal_code, p.display_name, p.get_gender_display(), p.date_of_birth, p.calculated_age,
-           p.contacts.values_list("value", flat=True).first() or "", p.addresses.values_list("text", flat=True).first() or "",
-           p.source_type, p.external_id, p.total_visit_count] for p in patients)),
-        ("مراجعة المرضى", ["الرقم", "المريض", "التاريخ", "نوع الزيارة", "القسم", "الطبيب", "المنظم", "الحالة", "الشكوى", "التشخيص", "الملاحظات", "المصدر"],
-         ([v.pk, v.patient.internal_code, v.visit_date.isoformat(), v.get_visit_type_display(), str(v.department or ""),
-           str(v.doctor_reference or v.doctor or ""), str(v.organizer_reference or v.organizer or ""),
-           v.get_status_display(), v.chief_complaint, v.diagnosis, v.notes, v.source] for v in visits)),
-        ("المختبر", ["الرقم", "المريض", "التاريخ", "الحالة", "الملاحظات"],
-         ([o.pk, o.patient.internal_code, o.order_date.isoformat(), o.get_status_display(), o.notes]
-          for o in LabOrder.objects.select_related("patient"))),
-        ("الإحالات", ["الرقم", "المريض", "التاريخ", "الجهة", "السبب", "الحالة"],
-         ([r.pk, r.patient.internal_code, r.referral_date.isoformat(), r.destination_name, r.reason, r.get_status_display()]
-          for r in Referral.objects.select_related("patient"))),
-        ("عيادة العيون", ["الرقم", "المريض", "التاريخ", "حدة يمين", "حدة يسار", "ضغط يمين", "ضغط يسار", "التشخيص"],
-         ([e.pk, e.patient.internal_code, e.visit_date.isoformat(), e.visual_acuity_right, e.visual_acuity_left,
-           e.iop_right, e.iop_left, e.diagnosis] for e in EyeClinicVisit.objects.select_related("patient"))),
+        ("المرضى", ["ت", "الرقم التعريفي الخاص بالمريض", "الاسم", "الجنس", "العمر", "العنوان",
+                     "رقم الهاتف", "القسم", "الحالة", "اسم الطبيب", "اسم المنظم", "التاريخ", "الملاحظات"], patient_rows),
+        ("المختبر", ["ت", "الرقم التعريفي", "الاسم", "العمر", "نوع الفحص"], lab_rows),
+        ("الإحالات", ["ت", "الرقم التعريفي", "الاسم", "الطبيب المحال إليه"], referral_rows),
+        ("عيادة العيون", ["ت", "الرقم التعريفي", "الاسم", "العمر", "التشخيص", "الملاحظات"], eye_rows),
     ]
 
 
@@ -151,15 +181,30 @@ def _plain(value):
 
 def create_excel_export():
     path = _export_dir("Excel") / f"ClinicData-export-{_stamp()}.xlsx"
-    book = Workbook(write_only=True)
-    for title, headers, rows in _export_tables():
+    book = Workbook()
+    book.remove(book.active)
+    for index, (title, headers, rows) in enumerate(_export_tables(), start=1):
         sheet = book.create_sheet(title=title)
+        sheet.sheet_view.rightToLeft = True
+        sheet.freeze_panes = "A2"
         sheet.append(headers)
+        for cell in sheet[1]:
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="1F4E78")
         for row in rows:
             sheet.append([_plain(value) for value in row])
+        if sheet.max_row >= 2:
+            table = Table(displayName=f"ClinicTable{index}", ref=f"A1:{sheet.cell(1, len(headers)).column_letter}{sheet.max_row}")
+            table.tableStyleInfo = TableStyleInfo(
+                name="TableStyleMedium2", showFirstColumn=False, showLastColumn=False,
+                showRowStripes=True, showColumnStripes=False,
+            )
+            sheet.add_table(table)
+        for column in sheet.columns:
+            width = min(45, max(12, max(len(str(cell.value or "")) for cell in column) + 2))
+            sheet.column_dimensions[column[0].column_letter].width = width
     book.save(path)
     return path
-
 
 def create_csv_export():
     path = _export_dir("ZIP") / f"ClinicData-export-{_stamp()}.zip"
