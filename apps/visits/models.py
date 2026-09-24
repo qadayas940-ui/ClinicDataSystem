@@ -38,6 +38,9 @@ class Visit(SoftDeleteModel):
         on_delete=models.SET_NULL, null=True, blank=True, related_name="organized_reference_visits",
         limit_choices_to={"category": "organizer"},
     )
+    department_text = models.CharField("القسم المكتوب", max_length=255, blank=True, default="")
+    doctor_text = models.CharField("اسم الطبيب المكتوب", max_length=255, blank=True, default="")
+    organizer_text = models.CharField("اسم المنظّم المكتوب", max_length=255, blank=True, default="")
     status = models.CharField("الحالة", max_length=20, choices=STATUS_CHOICES, default="open")
     chief_complaint = models.TextField("الشكوى الرئيسية", blank=True, default="")
     diagnosis = models.TextField("التشخيص", blank=True, default="")
@@ -49,6 +52,18 @@ class Visit(SoftDeleteModel):
         verbose_name = "زيارة"
         verbose_name_plural = "الزيارات"
         ordering = ["-visit_date"]
+
+    @property
+    def department_label(self):
+        return self.department_text or str(self.department or "")
+
+    @property
+    def doctor_label(self):
+        return self.doctor_text or str(self.doctor_reference or self.doctor or "")
+
+    @property
+    def organizer_label(self):
+        return self.organizer_text or str(self.organizer_reference or self.organizer or "")
 
     def __str__(self):
         return f"زيارة {self.patient} @ {self.visit_date}"

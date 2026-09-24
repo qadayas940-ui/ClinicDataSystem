@@ -1,4 +1,5 @@
 """اختبارات المصادقة: تسجيل الدخول، القفل، إعداد المالك، تغيير كلمة المرور."""
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -24,6 +25,20 @@ class LoginTests(TestCase):
             self.login_url, {"username": "doctor", "password": "CorrectPass123"}
         )
         self.assertRedirects(response, reverse("core:dashboard"))
+
+    def test_desktop_session_remains_valid_and_updates_use_versioned_cookie(self):
+        self.assertGreater(settings.SESSION_COOKIE_AGE, 365 * 24 * 60 * 60)
+        self.assertIn(settings.APP_VERSION.replace(".", "_"), settings.SESSION_COOKIE_NAME)
+        self.client.post(self.login_url, {"username": "doctor", "password": "CorrectPass123"})
+        self.assertEqual(self.client.get(reverse("core:dashboard")).status_code, 200)
+
+    def test_startup_restores_arabic_after_switching_to_english(self):
+        self.client.force_login(self.user)
+        self.client.get(reverse("core:set_language", args=["en"]))
+        response = self.client.get(reverse("core:startup_arabic"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.cookies[settings.LANGUAGE_COOKIE_NAME].value, "ar")
+        self.assertEqual(self.client.get(reverse("core:dashboard")).wsgi_request.LANGUAGE_CODE, "ar")
 
     def test_failed_login_increments_counter(self):
         self.client.post(self.login_url, {"username": "doctor", "password": "wrong"})

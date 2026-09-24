@@ -26,11 +26,15 @@ def normalize_iraqi_mobile(value):
     return "+964" + local[1:]
 
 
+def normalize_name_for_validation(value):
+    return re.sub(r"\s+", " ", (value or "").strip()).casefold()
+
+
 class PatientForm(forms.Form):
     full_name = forms.CharField(
         label="اسم المريض",
         max_length=255,
-        help_text="اكتب اسمين على الأقل؛ سيبحث النظام تلقائياً عن السجلات الأقرب.",
+        help_text="اكتب ثلاثة أسماء على الأقل؛ الاسم المركّب مثل عبد الله يُحسب اسمًا واحدًا.",
     )
     gender = forms.ChoiceField(label="الجنس", choices=Patient.GENDER_CHOICES)
     date_of_birth = forms.DateField(
@@ -68,6 +72,10 @@ class PatientForm(forms.Form):
         label="اسم المنظّم", queryset=ReferenceValue.objects.none(), required=False,
         empty_label="— اختر المنظّم —",
     )
+    department_text = forms.CharField(required=False, max_length=255, widget=forms.HiddenInput())
+    doctor_text = forms.CharField(required=False, max_length=255, widget=forms.HiddenInput())
+    organizer_text = forms.CharField(required=False, max_length=255, widget=forms.HiddenInput())
+    diagnosis_text = forms.CharField(required=False, max_length=255, widget=forms.HiddenInput())
     visit_date = forms.DateField(
         label="تاريخ الزيارة", required=False, widget=forms.DateInput(attrs={"type": "date"}),
     )
@@ -87,6 +95,7 @@ class PatientForm(forms.Form):
     notes = forms.CharField(label="الملاحظات", required=False, widget=forms.Textarea(attrs={"rows": 3}))
     def __init__(self, *args, require_complete=False, department=None, language="ar", **kwargs):
         self.require_complete = require_complete
+        self.original_name = kwargs.pop("original_name", None)
         super().__init__(*args, **kwargs)
         self.fields["department"].queryset = Department.objects.filter(is_active=True)
         self.fields["organizer_reference"].queryset = ReferenceValue.objects.filter(category="organizer", is_active=True)
@@ -109,7 +118,7 @@ class PatientForm(forms.Form):
         self.fields["visit_date"].initial = self.fields["visit_date"].initial or now.date()
         self.fields["visit_time"].initial = self.fields["visit_time"].initial or now.time().replace(second=0, microsecond=0)
         if require_complete:
-            for name in ("department", "doctor_reference", "organizer_reference", "visit_date", "visit_time"):
+            for name in ("visit_date", "visit_time"):
                 self.fields[name].required = True
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
@@ -151,17 +160,20 @@ class PatientForm(forms.Form):
             else:
                 units.append(parts[index])
                 index += 1
-        if self.require_complete and len(units) < 2:
-            raise forms.ValidationError("اكتب اسمين على الأقل للبحث والتسجيل.")
+        if parts[-1] in compound_starts:
+            raise forms.ValidationError("أكمل الاسم المركّب، مثل عبد الله أو عبد الرحمن.")
+        if len(units) < 3 and normalize_name_for_validation(value) != normalize_name_for_validation(self.original_name):
+            raise forms.ValidationError("اكتب ثلاثة أسماء على الأقل؛ عبد الله يُحسب اسمًا واحدًا.")
         if re.search(r"[0-9٠-٩]", value):
             raise forms.ValidationError("الاسم لا يجب أن يحتوي أرقاماً.")
         return value
 
-    def clean_phone(self):
-        return normalize_iraqi_mobile(self.cleaned_data.get("phone"))
-
     def clean(self):
         data = super().clean()
+        if self.require_complete:
+            for choice, text, label in (("department", "department_text", "القسم"), ("doctor_reference", "doctor_text", "اسم الطبيب"), ("organizer_reference", "organizer_text", "اسم المنظّم")):
+                if not data.get(choice) and not (data.get(text) or "").strip():
+                    self.add_error(choice, f"أدخل {label} أو اختره من القائمة.")
         if data.get("date_of_birth") and data["date_of_birth"].year < 1900:
             self.add_error("date_of_birth", "تاريخ الميلاد قديم بصورة غير منطقية.")
         if data.get("date_of_birth") and data["date_of_birth"] > timezone.localdate():
@@ -173,6 +185,9 @@ class PatientForm(forms.Form):
         if data.get("approx_age_value") is not None and not data.get("approx_age_unit"):
             self.add_error("approx_age_unit", "اختر وحدة العمر التقريبي.")
         return data
+
+    def clean_phone(self):
+        return normalize_iraqi_mobile(self.cleaned_data.get("phone"))
 
     def apply_widget_classes(self):
         return self

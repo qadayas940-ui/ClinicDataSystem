@@ -102,13 +102,20 @@ def _visit_datetime(value, visit_time=None):
 
 def _visit_payload(cleaned_data):
     diagnosis = cleaned_data.get("diagnosis_reference")
+    department_text = (cleaned_data.get("department_text") or "").strip()
+    doctor_text = (cleaned_data.get("doctor_text") or "").strip()
+    organizer_text = (cleaned_data.get("organizer_text") or "").strip()
+    diagnosis_text = (cleaned_data.get("diagnosis_text") or "").strip()
     return {
         "visit_date": _visit_datetime(cleaned_data.get("visit_date"), cleaned_data.get("visit_time")),
         "visit_type": cleaned_data.get("visit_type", "clinic"),
-        "department": cleaned_data.get("department"),
-        "doctor_reference": cleaned_data.get("doctor_reference"),
-        "organizer_reference": cleaned_data.get("organizer_reference"),
-        "diagnosis": diagnosis.canonical_name if diagnosis else (cleaned_data.get("diagnosis") or ""),
+        "department": None if department_text else cleaned_data.get("department"),
+        "department_text": department_text,
+        "doctor_reference": None if doctor_text else cleaned_data.get("doctor_reference"),
+        "doctor_text": doctor_text,
+        "organizer_reference": None if organizer_text else cleaned_data.get("organizer_reference"),
+        "organizer_text": organizer_text,
+        "diagnosis": diagnosis_text or (diagnosis.canonical_name if diagnosis else (cleaned_data.get("diagnosis") or "")),
         "chief_complaint": cleaned_data.get("chief_complaint", ""),
         "notes": cleaned_data.get("notes", ""),
     }
@@ -178,7 +185,7 @@ def create_patient(cleaned_data, user):
     address = (cleaned_data.get("address") or "").strip()
     if address:
         PatientAddress.objects.create(patient=patient, text=address, address_type="سكن")
-    if any(cleaned_data.get(key) for key in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference", "diagnosis", "chief_complaint", "notes", "visit_date", "visit_time")):
+    if any(cleaned_data.get(key) for key in ("department", "department_text", "doctor_reference", "doctor_text", "organizer_reference", "organizer_text", "diagnosis_reference", "diagnosis_text", "diagnosis", "chief_complaint", "notes", "visit_date", "visit_time")):
         from apps.visits.models import Visit
 
         Visit.objects.create(patient=patient, created_by=user, **_visit_payload(cleaned_data))
@@ -222,7 +229,7 @@ def update_patient(patient, cleaned_data):
         PatientAddress.objects.create(patient=patient, text=address, address_type="سكن")
     elif current_address:
         current_address.soft_delete()
-    if any(cleaned_data.get(key) for key in ("department", "doctor_reference", "organizer_reference", "diagnosis_reference", "diagnosis", "chief_complaint", "notes", "visit_date", "visit_time")):
+    if any(cleaned_data.get(key) for key in ("department", "department_text", "doctor_reference", "doctor_text", "organizer_reference", "organizer_text", "diagnosis_reference", "diagnosis_text", "diagnosis", "chief_complaint", "notes", "visit_date", "visit_time")):
         from apps.visits.models import Visit
 
         visit = patient.visits.first()

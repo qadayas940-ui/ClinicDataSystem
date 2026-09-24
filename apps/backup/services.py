@@ -13,8 +13,9 @@ from django.core.management import call_command
 from django.db import connection
 from django.utils import timezone
 from openpyxl import Workbook
+from openpyxl.workbook.properties import CalcProperties
 from openpyxl.worksheet.datavalidation import DataValidation
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 from apps.core.models import BackupHistory
@@ -135,9 +136,9 @@ def _export_tables():
                 sequence, patient.internal_code, patient.display_name, patient.get_gender_display(),
                 patient.calculated_age, patient.addresses.values_list("text", flat=True).first() or "",
                 patient.contacts.values_list("value", flat=True).first() or "",
-                str(visit.department or "") if visit else "", visit.diagnosis if visit else "",
-                str(visit.doctor_reference or visit.doctor or "") if visit else "",
-                str(visit.organizer_reference or visit.organizer or "") if visit else "",
+                visit.department_label if visit else "", visit.diagnosis if visit else "",
+                visit.doctor_label if visit else "",
+                visit.organizer_label if visit else "",
                 timezone.localtime(visit.visit_date).strftime("%Y/%m/%d — %I:%M %p").lstrip("0") if visit else "", visit.notes if visit else "",
             ])
 
@@ -208,6 +209,7 @@ def _safe_sheet_title(value, existing):
 def create_excel_export():
     path = _export_dir("Excel") / f"ClinicData-export-{_stamp()}.xlsx"
     book = Workbook()
+    book.calculation = CalcProperties(calcMode="auto", fullCalcOnLoad=True, forceFullCalc=True)
     book.remove(book.active)
     exported = _export_tables()
     for index, (title, headers, rows) in enumerate(exported, start=1):
@@ -236,23 +238,94 @@ def create_excel_export():
     _style_excel_sheet(index_sheet, "SpecialtiesIndex")
     search = book.create_sheet("البحث")
     search.sheet_view.rightToLeft = True
-    search["A1"] = "البحث عن مريض"
-    search["A1"].font = Font(bold=True, color="FFFFFF", size=16)
-    search["A1"].fill = PatternFill("solid", fgColor="062F50")
     search.merge_cells("A1:F1")
-    search["A3"], search["B3"] = "اختر الاسم", ""
+    search["A1"] = "البحث عن مريض"
+    search["A1"].font = Font(bold=True, color="FFFFFF", size=15)
+    search["A1"].fill = PatternFill("solid", fgColor="062F50")
+    search["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    search.row_dimensions[1].height = 32
+
+    search.merge_cells("A2:D2")
+    search["A2"] = "ابحث هنا ← اكتب جزءًا من اسم المريض"
+    search["A2"].font = Font(bold=True, color="062F50", size=12)
+    search["A2"].alignment = Alignment(horizontal="right", vertical="center")
+    search.row_dimensions[2].height = 29
+    search.merge_cells("B3:D3")
+    search["B3"] = ""
+    search["B3"].font = Font(size=14, color="062F50")
+    search["B3"].fill = PatternFill("solid", fgColor="E8F6F2")
+    search["B3"].border = Border(bottom=Side(style="medium", color="087F73"))
+    search["B3"].alignment = Alignment(horizontal="right", vertical="center")
+    search.row_dimensions[3].height = 34
+    search["A4"] = "اختر الاسم"
+    search["A4"].font = Font(bold=True, color="062F50")
+    search.merge_cells("B4:D4")
+    search["B4"].fill = PatternFill("solid", fgColor="F1F7FA")
+    search["B4"].alignment = Alignment(horizontal="right", vertical="center")
+    search.row_dimensions[4].height = 30
+    search.merge_cells("B6:D6")
+    search["B6"] = "الأسماء المطابقة — الاسم | الرقم التعريفي"
+    search["B6"].font = Font(bold=True, color="FFFFFF")
+    search["B6"].fill = PatternFill("solid", fgColor="087F73")
+    search["B6"].alignment = Alignment(horizontal="right")
+    last_patient_row = len(patient_rows) + 1
     if patient_rows:
-        validation = DataValidation(type="list", formula1=f"'المرضى'!$C$2:$C${len(patient_rows)+1}", allow_blank=True)
+        names = f"المرضى!$C$2:$C${last_patient_row}"
+        codes = f"المرضى!$B$2:$B${last_patient_row}"
+        for row_number in range(7, 22):
+            search.merge_cells(start_row=row_number, start_column=2, end_row=row_number, end_column=4)
+            cell = search[f"B{row_number}"]
+            cell.value = (
+                f'=IF($B$3="","",IFERROR(INDEX(_xlfn.UNIQUE(_xlfn._xlws.FILTER('
+                f'{names}&" | "&{codes},ISNUMBER(SEARCH($B$3,{names})),"")),'
+                f'ROW()-6),""))'
+            )
+            cell.alignment = Alignment(horizontal="right")
+            if row_number % 2:
+                cell.fill = PatternFill("solid", fgColor="F1F7FA")
+        validation = DataValidation(type="list", formula1="$B$7:$B$21", allow_blank=True)
+        validation.showDropDown = False
+        validation.error = "اختر اسمًا من النتائج المطابقة."
+        validation.showErrorMessage = True
         search.add_data_validation(validation)
-        validation.add(search["B3"])
-    labels = [("A5","الرقم التعريفي","B5","B"),("C5","الجنس","D5","D"),("E5","العمر","F5","E"),("A7","العنوان","B7","F"),("C7","رقم الهاتف","D7","G"),("E7","القسم","F7","H"),("A9","الحالة","B9","I"),("C9","اسم الطبيب","D9","J"),("E9","التاريخ","F9","L")]
-    for label_cell, label, value_cell, source_col in labels:
-        search[label_cell] = label
-        search[label_cell].font = Font(bold=True, color="062F50")
-        search[value_cell] = f'=IFERROR(INDEX(المرضى!${source_col}:${source_col},MATCH($B$3,المرضى!$C:$C,0)),"")'
-    search["A12"] = "جميع زيارات الاسم المختار (Excel 365)"
-    search["A13"] = '=IF($B$3="","",_xlfn._xlws.FILTER(المرضى!A:M,المرضى!C:C=$B$3,"لا توجد زيارات"))'
-    for column, width in {"A":22,"B":28,"C":18,"D":24,"E":18,"F":28}.items():
+        validation.add(search["B4"])
+
+    search.merge_cells("G2:I2")
+    search["G2"] = "بطاقة المريض"
+    search["G2"].font = Font(bold=True, color="FFFFFF", size=14)
+    search["G2"].fill = PatternFill("solid", fgColor="062F50")
+    search["G2"].alignment = Alignment(horizontal="center")
+    search["G4"] = "الرقم التعريفي"
+    search.merge_cells("H4:I4")
+    search["H4"] = '=IFERROR(TRIM(MID($B$4,FIND(" | ",$B$4)+3,99)),"")'
+    card_rows = [
+        (3, "الاسم", "C", False), (5, "الجنس", "D", False),
+        (6, "العمر", "E", False), (7, "العنوان", "F", False),
+        (8, "الهاتف", "G", False), (9, "القسم", "H", True),
+        (10, "الحالة / التشخيص", "I", True), (11, "الطبيب", "J", True),
+        (12, "المنظّم", "K", True), (13, "التاريخ", "L", True),
+        (14, "الملاحظات", "M", True),
+    ]
+    for row_number, label, source_col, latest in card_rows:
+        search[f"G{row_number}"] = label
+        search.merge_cells(start_row=row_number, start_column=8, end_row=row_number, end_column=9)
+        if patient_rows:
+            if latest:
+                result = f'LOOKUP(2,1/(المرضى!$B$2:$B${last_patient_row}=$H$4),المرضى!${source_col}$2:${source_col}${last_patient_row})'
+            else:
+                result = f'INDEX(المرضى!${source_col}:${source_col},MATCH($H$4,المرضى!$B:$B,0))'
+            search[f"H{row_number}"] = f'=IF($H$4="","",IFERROR({result},""))'
+    for row_number in range(3, 15):
+        search[f"G{row_number}"].font = Font(bold=True, color="062F50")
+        search[f"G{row_number}"].fill = PatternFill("solid", fgColor="E8F6F2")
+        search[f"H{row_number}"].alignment = Alignment(horizontal="right", vertical="center")
+        search.row_dimensions[row_number].height = max(search.row_dimensions[row_number].height or 0, 27)
+
+    search["A24"] = "جميع زيارات المريض المختار (Excel 365)"
+    search["A24"].font = Font(bold=True, color="062F50")
+    if patient_rows:
+        search["A25"] = f'=IF($H$4="","",_xlfn._xlws.FILTER(المرضى!A2:M${last_patient_row},المرضى!B2:B${last_patient_row}=$H$4,"لا توجد زيارات"))'
+    for column, width in {"A":25,"B":31,"C":20,"D":25,"E":15,"F":20,"G":22,"H":28,"I":24}.items():
         search.column_dimensions[column].width = width
     changes = book.create_sheet("التغييرات")
     changes.append(["العملية","الرقم التعريفي","الاسم","القسم","التاريخ","الملاحظات"])

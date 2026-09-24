@@ -76,7 +76,8 @@
       menu.className="combo-menu"; menu.hidden=true;
       select.parentNode.insertBefore(wrapper,select); wrapper.appendChild(input); wrapper.appendChild(button); wrapper.appendChild(menu); wrapper.appendChild(select); select.classList.add("combo-native");
       function options(){return Array.from(select.options).filter(function(option){return option.value;});}
-      function selectedText(){var option=select.options[select.selectedIndex];return option&&option.value?option.text:"";}
+      var textField=select.form&&select.form.querySelector('[name="'+select.name+'_text"]');
+      function selectedText(){var option=select.options[select.selectedIndex];return option&&option.value?option.text:(textField?textField.value:"");}
       function render(query){
         var typed=(query||"").trim(), normalized=typed.toLowerCase();
         var items=options().filter(function(option){return !normalized||option.text.toLowerCase().indexOf(normalized)>=0;});
@@ -89,11 +90,15 @@
         if(select.dataset.referenceCategory&&typed.length>=2&&!exact){menu.insertAdjacentHTML("beforeend",'<button type="button" class="combo-add" data-add-value="'+escapeHtml(typed)+'">＋ إضافة «'+escapeHtml(typed)+'» إلى القائمة</button>');}
         if(!menu.children.length)menu.innerHTML='<span>لا توجد نتائج</span>';
         menu.hidden=false;
-        menu.querySelectorAll("button[data-value]").forEach(function(item){item.addEventListener("click",function(){select.value=item.dataset.value;input.value=selectedText();menu.hidden=true;select.dispatchEvent(new Event("change",{bubbles:true}));});});
+        menu.querySelectorAll("button[data-value]").forEach(function(item){item.addEventListener("click",function(){select.value=item.dataset.value;if(textField)textField.value="";input.value=selectedText();menu.hidden=true;select.dispatchEvent(new Event("change",{bubbles:true}));});});
         var add=menu.querySelector("[data-add-value]"); if(add)add.addEventListener("click",function(){quickCreateReference(select,input,menu,add.dataset.addValue);});
       }
-      input.value=selectedText(); input.addEventListener("input",function(){render(input.value);}); input.addEventListener("focus",function(){render(input.value);}); button.addEventListener("click",function(){if(menu.hidden)render("");else menu.hidden=true;});
-      select.addEventListener("change",function(){input.value=selectedText();});
+      input.value=selectedText(); input.addEventListener("input",function(){
+        var typed=input.value.trim();
+        if(textField){var hadSelection=Boolean(select.value);textField.value=typed;select.value="";if(hadSelection)select.dispatchEvent(new Event("change",{bubbles:true}));}
+        render(typed);
+      }); input.addEventListener("focus",function(){render(input.value);}); button.addEventListener("click",function(){if(menu.hidden)render("");else menu.hidden=true;});
+      select.addEventListener("change",function(){if(select.value&&textField)textField.value="";if(select.value)input.value=selectedText();});
       select._comboRefresh=function(){input.value=selectedText();if(!menu.hidden)render(input.value);};
       document.addEventListener("click",function(event){if(!wrapper.contains(event.target))menu.hidden=true;});
     });
@@ -122,7 +127,7 @@
       if(textOnly){menu.hidden=true;return;}
       var existing=Array.from(control.options).find(function(option){return option.value===String(result.item.id);});
       if(!existing){existing=document.createElement("option");existing.value=result.item.id;existing.textContent=result.item.text;control.appendChild(existing);}
-      control.value=String(result.item.id);input.value=result.item.text;menu.hidden=true;control.dispatchEvent(new Event("change",{bubbles:true}));
+      control.value=String(result.item.id);var textField=control.form&&control.form.querySelector('[name="'+control.name+'_text"]');if(textField)textField.value="";input.value=result.item.text;menu.hidden=true;control.dispatchEvent(new Event("change",{bubbles:true}));
     }).catch(function(error){alert(error.error||"تعذر إضافة القيمة إلى القائمة.");});
   }
 
@@ -142,14 +147,27 @@
   function setupDrawer() {
     var screen = document.querySelector("[data-patient-screen]"); if (!screen) return;
     var drawer = screen.querySelector("[data-patient-drawer]");
-    function closeDrawer(){drawer.hidden=true;drawer.innerHTML="";screen.classList.remove("drawer-open");}
+    var drawerController=null, drawerUrl="", drawerRequest=0;
+    function closeDrawer(){if(drawerController)drawerController.abort();drawerController=null;drawerUrl="";drawerRequest++;drawer.hidden=true;drawer.innerHTML="";screen.classList.remove("drawer-open");}
     function wireDrawer(){
       drawer.querySelectorAll("[data-close-drawer]").forEach(function(button){button.addEventListener("click",closeDrawer);});
       setupBirthdate(drawer); setupSearchableComboboxes(drawer); setupDepartmentDoctors(drawer);
       var form=drawer.querySelector("[data-drawer-form]"); if(!form)return;
       form.addEventListener("submit",function(event){event.preventDefault();var submit=form.querySelector('[type="submit"]');if(submit)submit.disabled=true;fetch(form.action,{method:"POST",body:new FormData(form),headers:{"X-Requested-With":"XMLHttpRequest"}}).then(function(response){var type=response.headers.get("content-type")||"";if(type.indexOf("application/json")>=0)return response.json();return response.text().then(function(html){throw {html:html};});}).then(function(data){var row=screen.querySelector('[data-drawer-url="'+form.action+'"]');if(row&&data.patient){var name=row.querySelector("[data-row-name]");if(name)name.textContent=data.patient.name;}var message=drawer.querySelector("[data-drawer-message]");if(message){message.hidden=false;message.className="drawer-message success";message.textContent=data.message;}setTimeout(closeDrawer,700);}).catch(function(error){if(error.html){drawer.innerHTML=error.html;wireDrawer();}else{var message=drawer.querySelector("[data-drawer-message]");if(message){message.hidden=false;message.textContent="تعذر حفظ التغييرات. تحقق من الحقول وحاول مرة أخرى.";}}}).finally(function(){if(submit)submit.disabled=false;});});
     }
-    function openDrawer(url){document.dispatchEvent(new Event("patient:drawer-open"));drawer.hidden=false;drawer.innerHTML='<div class="drawer-loading">جارٍ فتح بطاقة المريض…</div>';screen.classList.add("drawer-open");fetch(url,{headers:{"X-Requested-With":"XMLHttpRequest"}}).then(function(r){return r.text();}).then(function(html){drawer.innerHTML=html;wireDrawer();}).catch(function(){drawer.innerHTML='<div class="alert alert-danger">تعذر فتح بطاقة المريض.</div>';});}
+    function openDrawer(url){
+      if(drawerController&&drawerUrl===url)return;
+      if(drawerController)drawerController.abort();
+      var requestId=++drawerRequest, controller=new AbortController();
+      drawerController=controller;drawerUrl=url;
+      document.dispatchEvent(new Event("patient:drawer-open"));
+      drawer.hidden=false;drawer.innerHTML='<div class="drawer-loading">جارٍ فتح بطاقة المريض…</div>';screen.classList.add("drawer-open");
+      fetch(url,{headers:{"X-Requested-With":"XMLHttpRequest"},signal:controller.signal})
+        .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.text();})
+        .then(function(html){if(requestId!==drawerRequest)return;drawer.innerHTML=html;wireDrawer();})
+        .catch(function(error){if(requestId!==drawerRequest||error.name==="AbortError")return;drawer.innerHTML='<div class="alert alert-danger">تعذر فتح بطاقة المريض. حاول مجددًا.</div>';})
+        .finally(function(){if(requestId===drawerRequest){drawerController=null;drawerUrl="";}});
+    }
     screen.querySelectorAll("[data-patient-row]").forEach(function(row){row.addEventListener("dblclick",function(event){if(event.target.closest("a,button,input,select,textarea"))return;openDrawer(row.dataset.drawerUrl);});var button=row.querySelector("[data-open-drawer]");if(button)button.addEventListener("click",function(){openDrawer(row.dataset.drawerUrl);});});
     var initial=screen.dataset.initialPatient;if(initial){var row=screen.querySelector('[data-drawer-url*="'+initial+'"]');if(row)openDrawer(row.dataset.drawerUrl);}
   }

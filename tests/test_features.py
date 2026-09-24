@@ -64,9 +64,9 @@ class PatientWorkflowTests(TestCase):
         self.assertEqual(response.json()["results"][0]["id"], str(imported.pk))
         self.assertEqual(response.json()["results"][0]["source"], "مستورد")
 
-    def test_registration_allows_two_names_and_optional_contact_address_diagnosis(self):
+    def test_registration_requires_three_names_and_keeps_optional_contact_address_diagnosis(self):
         form = PatientForm(data={
-            "full_name": "علي حسن", "gender": "male",
+            "full_name": "علي حسن كامل", "gender": "male",
             "approx_age_value": "30", "approx_age_unit": "year",
             "phone": "", "address": "", "diagnosis_reference": "",
             "department": "", "doctor_reference": "", "organizer_reference": "",
@@ -77,6 +77,42 @@ class PatientWorkflowTests(TestCase):
         self.assertNotIn("phone", form.errors)
         self.assertNotIn("address", form.errors)
         self.assertNotIn("diagnosis_reference", form.errors)
+
+    def test_three_name_units_count_compound_names_once(self):
+        base = {
+            "gender": "male", "approx_age_value": "30", "approx_age_unit": "year",
+            "department_text": "قسم تجريبي", "doctor_text": "طبيب تجريبي",
+            "organizer_text": "منظّم تجريبي",
+            "visit_date": timezone.localdate().isoformat(), "visit_time": "19:00",
+        }
+        for name in ("علي حسن", "عبد الله أحمد"):
+            form = PatientForm(data={**base, "full_name": name}, require_complete=True)
+            self.assertFalse(form.is_valid())
+            self.assertIn("full_name", form.errors)
+        form = PatientForm(data={**base, "full_name": "عبد الله أحمد محمد"}, require_complete=True)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["full_name"], "عبد الله أحمد محمد")
+        historical = PatientForm(data={**base, "full_name": "علي حسن"}, original_name="علي حسن")
+        self.assertTrue(historical.is_valid(), historical.errors)
+
+    def test_typed_visit_values_save_without_creating_reference_choices(self):
+        data = {
+            "full_name": "علي حسن كامل", "gender": "male",
+            "approx_age_value": "30", "approx_age_unit": "year",
+            "department_text": "قسم جديد", "doctor_text": "دكتور جديد",
+            "organizer_text": "منظّم جديد", "diagnosis_text": "حالة جديدة",
+            "visit_date": timezone.localdate().isoformat(), "visit_time": "19:00",
+        }
+        form = PatientForm(data=data, require_complete=True)
+        self.assertTrue(form.is_valid(), form.errors)
+        patient = create_patient(form.cleaned_data, self.user)
+        visit = patient.visits.get()
+        self.assertEqual(visit.department_text, "قسم جديد")
+        self.assertEqual(visit.doctor_text, "دكتور جديد")
+        self.assertEqual(visit.organizer_text, "منظّم جديد")
+        self.assertEqual(visit.diagnosis, "حالة جديدة")
+        self.assertFalse(ReferenceValue.objects.filter(canonical_name__in=["دكتور جديد", "منظّم جديد", "حالة جديدة"]).exists())
+        self.assertFalse(Department.objects.filter(name="قسم جديد").exists())
 
     def test_doctor_choices_depend_on_department(self):
         women = Department.objects.create(name="نسائية", code="WOMEN")
@@ -94,6 +130,15 @@ class PatientWorkflowTests(TestCase):
         response = self.client.get(reverse("patients:drawer", args=[patient.pk]))
         self.assertContains(response, "بطاقة المريض")
         self.assertContains(response, patient.internal_code)
+
+    def test_opening_same_patient_drawer_twice_returns_success(self):
+        patient = create_patient({"full_name": "سارة أحمد محمود علي", "gender": "female", "approx_age_value": 8, "approx_age_unit": "year", "phone": "", "address": ""}, self.user)
+        self.client.force_login(self.user)
+        url = reverse("patients:drawer", args=[patient.pk])
+        for _ in range(2):
+            response = self.client.get(url, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, patient.internal_code)
 
     def test_patient_drawer_saves_without_server_error(self):
         patient = create_patient({"full_name": "سارة أحمد محمود علي", "gender": "female", "date_of_birth": None, "approx_age_value": 8, "approx_age_unit": "year", "phone": "07899189225", "address": "الزهور"}, self.user)
@@ -437,3 +482,9 @@ class ApprovedInterfaceAndExportTests(TestCase):
             self.assertEqual(path.suffix, ".xlsx")
             self.assertTrue({"المرضى","المختبر","الإحالات","اختصاصات","البحث","التغييرات"}.issubset(book.sheetnames))
             self.assertEqual(book["المرضى"]["B2"].value, first.internal_code)
+            search = book["البحث"]
+            self.assertEqual(str(search.merged_cells.ranges).count("B3:D3"), 1)
+            self.assertIn("G2:I2", str(search.merged_cells.ranges))
+            self.assertIn("FILTER", search["B7"].value)
+            self.assertTrue(search.data_validations.dataValidation)
+            book.close()

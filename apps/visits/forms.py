@@ -10,8 +10,8 @@ from .models import Visit
 class VisitForm(PatientCodeModelFormMixin, forms.ModelForm):
     class Meta:
         model = Visit
-        fields = ["visit_date", "visit_type", "department", "doctor_reference", "organizer_reference", "status", "chief_complaint", "diagnosis", "notes"]
-        widgets = {"visit_date": forms.DateTimeInput(attrs={"type": "datetime-local"}), "chief_complaint": forms.Textarea(attrs={"rows": 2}), "diagnosis": forms.Textarea(attrs={"rows": 2}), "notes": forms.Textarea(attrs={"rows": 2})}
+        fields = ["visit_date", "visit_type", "department", "department_text", "doctor_reference", "doctor_text", "organizer_reference", "organizer_text", "status", "chief_complaint", "diagnosis", "notes"]
+        widgets = {"visit_date": forms.DateTimeInput(attrs={"type": "datetime-local"}), "department_text": forms.HiddenInput(), "doctor_text": forms.HiddenInput(), "organizer_text": forms.HiddenInput(), "chief_complaint": forms.Textarea(attrs={"rows": 2}), "diagnosis": forms.Textarea(attrs={"rows": 2}), "notes": forms.Textarea(attrs={"rows": 2})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

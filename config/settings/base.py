@@ -232,7 +232,7 @@ MEDIA_ROOT = UPLOADS_DIR
 # ---------------------------------------------------------------------------
 # الجلسات (8 ساعات)
 # ---------------------------------------------------------------------------
-SESSION_COOKIE_AGE = 28800  # 8 ساعات بالثواني
+SESSION_COOKIE_AGE = 10 * 365 * 24 * 60 * 60  # جلسة الجهاز تبقى حتى تحديث الإصدار أو تسجيل الخروج
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = True
 
@@ -251,8 +251,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # معلومات التطبيق
 # ---------------------------------------------------------------------------
 APP_NAME = "نظام إدارة بيانات ومرضى العيادة"
-APP_VERSION = "1.5.8"
-DB_SCHEMA_VERSION = "3"
+APP_VERSION = "1.5.9"
+DB_SCHEMA_VERSION = "4"
+SESSION_COOKIE_NAME = "clinic_session_" + APP_VERSION.replace(".", "_")
 FACILITY_NAME = config("FACILITY_NAME", default="عيادة الموصل الخيرية")
 UPDATE_MANIFEST_URL = config("UPDATE_MANIFEST_URL", default="")
 PUBLIC_BASE_URL = config("PUBLIC_BASE_URL", default="").strip().rstrip("/")

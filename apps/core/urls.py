@@ -7,6 +7,7 @@ app_name = "core"
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("start/", views.startup_arabic, name="startup_arabic"),
     path("language/<str:language>/", views.set_language, name="set_language"),
     path("notifications/", views.notifications, name="notifications"),
     path("notifications/status/", views.notifications_status, name="notifications_status"),

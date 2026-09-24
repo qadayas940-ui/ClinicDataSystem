@@ -29,6 +29,25 @@ logger = logging.getLogger("clinic")
 User = get_user_model()
 
 
+def startup_arabic(request):
+    """كل فتح لنافذة البرنامج يبدأ بالعربية مع إبقاء تبديل اللغة متاحاً."""
+    from django.utils import translation
+
+    translation.activate("ar")
+    request.LANGUAGE_CODE = "ar"
+    request.session["django_language"] = "ar"
+    response = redirect("core:dashboard")
+    response.set_cookie(
+        settings.LANGUAGE_COOKIE_NAME, "ar",
+        max_age=365 * 24 * 60 * 60,
+        path=settings.LANGUAGE_COOKIE_PATH,
+        secure=settings.LANGUAGE_COOKIE_SECURE,
+        httponly=settings.LANGUAGE_COOKIE_HTTPONLY,
+        samesite=settings.LANGUAGE_COOKIE_SAMESITE,
+    )
+    return response
+
+
 @login_required
 def set_language(request, language):
     language = "en" if language == "en" else "ar"

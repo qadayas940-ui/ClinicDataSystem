@@ -203,8 +203,11 @@ def _open_client(url):
     try:
         import webview
 
-        webview.create_window(cfg.WINDOW_TITLE, url, width=cfg.WINDOW_WIDTH, height=cfg.WINDOW_HEIGHT)
-        webview.start()
+        start_url = url.rstrip("/") + "/start/"
+        storage_path = Path(os.environ.get("APPDATA", str(Path.home()))) / "ClinicDataSystem" / "WebView"
+        storage_path.mkdir(parents=True, exist_ok=True)
+        webview.create_window(cfg.WINDOW_TITLE, start_url, width=cfg.WINDOW_WIDTH, height=cfg.WINDOW_HEIGHT)
+        webview.start(private_mode=False, storage_path=str(storage_path))
     except Exception as exc:  # noqa: BLE001
         log_path = _write_startup_log(f"تعذر فتح نافذة العميل للخادم {url}: {exc}\n{traceback.format_exc()}")
         _show_error_dialog(f"تعذر فتح نافذة البرنامج. سيتم فتح الرابط في المتصفح:\n{url}", log_path)

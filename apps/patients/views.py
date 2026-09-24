@@ -140,7 +140,7 @@ def patient_match(request):
         "gender": item["patient"].get_gender_display(),
         "birth_date": item["patient"].date_of_birth.isoformat() if item["patient"].date_of_birth else "",
         "address": item["address"] or "—", "score": item["score"], "reasons": item["reasons"],
-        "department": item["latest_visit"].department.name if item["latest_visit"] and item["latest_visit"].department else "—",
+        "department": item["latest_visit"].department_label if item["latest_visit"] else "—",
         "last_visit": item["latest_visit"].visit_date.date().isoformat() if item["latest_visit"] else "",
         "source": "مستورد" if item["patient"].source_type == "excel" else "مسجل يدوياً",
         "visit_url": reverse("visits:create_for_patient", args=[item["patient"].pk]),
@@ -164,11 +164,15 @@ def _patient_initial(patient):
         "address": patient.addresses.values_list("text", flat=True).first() or "",
         "external_id": patient.external_id,
         "department": visit.department_id if visit else None,
+        "department_text": visit.department_text if visit else "",
         "doctor_reference": visit.doctor_reference_id if visit else None,
+        "doctor_text": visit.doctor_text if visit else "",
         "organizer_reference": visit.organizer_reference_id if visit else None,
+        "organizer_text": visit.organizer_text if visit else "",
         "visit_date": timezone.localtime(visit.visit_date).date() if visit else None,
         "visit_time": timezone.localtime(visit.visit_date).time().replace(second=0, microsecond=0) if visit else None,
         "diagnosis_reference": diagnosis.pk if diagnosis else None,
+        "diagnosis_text": visit.diagnosis if visit and not diagnosis else "",
         "chief_complaint": visit.chief_complaint if visit else "",
         "notes": visit.notes if visit else "",
     }
@@ -184,11 +188,13 @@ def patient_drawer(request, pk):
     can_edit = _may_edit(request.user)
     if request.method == "POST" and not can_edit:
         return JsonResponse({"ok": False, "message": "لا تملك صلاحية تعديل ملف المريض."}, status=403)
+    initial = _patient_initial(patient)
     form = PatientForm(
         request.POST or None,
-        initial=None if request.method == "POST" else _patient_initial(patient),
+        initial=None if request.method == "POST" else initial,
+        original_name=patient.display_name,
         require_complete=False,
-        department=(request.POST.get("department") if request.method == "POST" else (_patient_initial(patient).get("department"))),
+        department=(request.POST.get("department") if request.method == "POST" else initial.get("department")),
         language=getattr(request, "LANGUAGE_CODE", "ar"),
     )
     if request.method == "POST" and form.is_valid():
@@ -253,7 +259,7 @@ def patient_detail(request, pk):
 def patient_edit(request, pk):
     patient = get_object_or_404(Patient, pk=pk)
     initial = _patient_initial(patient)
-    form = PatientForm(request.POST or None, initial=initial, require_complete=False, department=initial.get("department"), language=getattr(request, "LANGUAGE_CODE", "ar")).apply_widget_classes()
+    form = PatientForm(request.POST or None, initial=initial, original_name=patient.display_name, require_complete=False, department=initial.get("department"), language=getattr(request, "LANGUAGE_CODE", "ar")).apply_widget_classes()
     if request.method == "POST" and form.is_valid():
         update_patient(patient, form.cleaned_data)
         log_audit(request, "update", "Patient", patient.pk, patient.internal_code)

@@ -4,7 +4,7 @@
 
 ## الحالة الحالية
 
-هذه نسخة تشغيلية مستمرة بلا انتهاء زمني. واجهات التشغيل الأساسية، حسابات الموظفين، الأقسام، الاستيراد المرحلي، سجل التدقيق، النسخ الكامل، وتصدير Excel موجودة على الفرع `codex/v1-complete`. يستخدم النشر متعدد المستخدمين PostgreSQL مركزياً، بينما يظل SQLite خياراً محلياً صريحاً للاختبار فقط.
+هذه نسخة تشغيلية مستمرة بلا انتهاء زمني. واجهات التشغيل الأساسية، حسابات الموظفين، الأقسام، الاستيراد المرحلي، سجل التدقيق، النسخ الكامل، وتصدير Excel موجودة على الفرع `codex/v1-5-build`. يستخدم النشر متعدد المستخدمين PostgreSQL مركزياً، بينما يظل SQLite خياراً محلياً صريحاً للاختبار فقط.
 
 > لا تضع ملفات المرضى أو قاعدة البيانات أو مفاتيح الترخيص في GitHub، خصوصاً عندما يكون المستودع عاماً.
 
@@ -13,7 +13,7 @@
 ```powershell
 git clone https://github.com/qadayas940-ui/ClinicDataSystem.git
 cd ClinicDataSystem
-git switch codex/v1-complete
+git switch codex/v1-5-build
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -50,7 +50,7 @@ pyinstaller --clean --noconfirm ClinicDataSystem.spec
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ClinicDataSystem.iss
 ```
 
-الناتج في `release/ClinicDataSystem-Setup-1.4.0.exe`.
+الناتج في `release/ClinicDataSystem-Setup-1.5.9.exe`.
 
 ## الاختبارات
 
@@ -61,7 +61,7 @@ python manage.py test
 python -m ruff check .
 ```
 
-آخر تحقق: 25 اختباراً آلياً ناجحاً، بالإضافة إلى فحص كامل للمصنف الفعلي واكتشاف 50,146 سجل بيانات فعلياً من دون نشر أسماء المرضى.
+تُشغّل اختبارات Django والتحقق من الترحيلات وفحص الأمان في GitHub Actions عند كل تعديل على فرع البناء.
 
 ## الشبكة
 
@@ -79,3 +79,7 @@ python -m ruff check .
 `ALLOWED_HOSTS=your-domain.example` و
 `CSRF_TRUSTED_ORIGINS=https://your-domain.example`.
 عندها تعرض شاشة «أجهزة العيادة» الرابط العام نفسه لجميع الأجهزة.
+
+## لغة البدء وجلسة الجهاز
+
+تبدأ نافذة Windows بالعربية في كل فتح، ويمكن التحويل إلى الإنجليزية من داخل البرنامج. تحتفظ نافذة البرنامج بجلسة تسجيل الدخول على جهاز المستخدم؛ ويطلب الإصدار الجديد تسجيل الدخول مرة أخرى عند التحديث أو بعد تسجيل الخروج صراحةً.
