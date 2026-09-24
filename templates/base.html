@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% block title %}{{ APP_NAME }}{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/clinic.css' %}"><link rel="stylesheet" href="{% static 'css/clinic-extras.css' %}">{% block extra_head %}{% endblock %}
+  <link rel="stylesheet" href="{% static 'css/clinic.css' %}?v={{ APP_VERSION }}"><link rel="stylesheet" href="{% static 'css/clinic-extras.css' %}?v={{ APP_VERSION }}">{% block extra_head %}{% endblock %}
 </head>
 <body class="clinic-body" data-reference-create-url="{% url 'core:reference_quick_create' %}"{% if user.is_owner %} data-reference-edit-url="{% url 'core:reference_edit' 0 %}" data-department-edit-url="{% url 'core:department_edit' 0 %}"{% endif %} data-ui-language="{{ UI_LANG }}"><div class="app-shell">
   <aside class="side-nav" data-menu>
@@ -20,4 +20,4 @@
     <main class="container">{% if messages %}{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}<button type="button" data-dismiss>×</button></div>{% endfor %}{% endif %}{% block content %}{% endblock %}</main>
     <footer>{{ APP_NAME }} · الإصدار {{ APP_VERSION }}</footer>
   </section>
-</div><script src="{% static 'js/clinic.js' %}"></script><script src="{% static 'js/clinic-extras.js' %}"></script>{% block extra_scripts %}{% endblock %}</body></html>
+</div><script src="{% static 'js/clinic.js' %}?v={{ APP_VERSION }}"></script><script src="{% static 'js/clinic-extras.js' %}?v={{ APP_VERSION }}"></script>{% block extra_scripts %}{% endblock %}</body></html>

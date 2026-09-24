@@ -153,7 +153,32 @@
       drawer.querySelectorAll("[data-close-drawer]").forEach(function(button){button.addEventListener("click",closeDrawer);});
       setupBirthdate(drawer); setupSearchableComboboxes(drawer); setupDepartmentDoctors(drawer);
       var form=drawer.querySelector("[data-drawer-form]"); if(!form)return;
-      form.addEventListener("submit",function(event){event.preventDefault();var submit=form.querySelector('[type="submit"]');if(submit)submit.disabled=true;fetch(form.action,{method:"POST",body:new FormData(form),headers:{"X-Requested-With":"XMLHttpRequest"}}).then(function(response){var type=response.headers.get("content-type")||"";if(type.indexOf("application/json")>=0)return response.json();return response.text().then(function(html){throw {html:html};});}).then(function(data){var row=screen.querySelector('[data-drawer-url="'+form.action+'"]');if(row&&data.patient){var name=row.querySelector("[data-row-name]");if(name)name.textContent=data.patient.name;}var message=drawer.querySelector("[data-drawer-message]");if(message){message.hidden=false;message.className="drawer-message success";message.textContent=data.message;}setTimeout(closeDrawer,700);}).catch(function(error){if(error.html){drawer.innerHTML=error.html;wireDrawer();}else{var message=drawer.querySelector("[data-drawer-message]");if(message){message.hidden=false;message.textContent="تعذر حفظ التغييرات. تحقق من الحقول وحاول مرة أخرى.";}}}).finally(function(){if(submit)submit.disabled=false;});});
+      form.addEventListener("submit",function(event){
+        event.preventDefault();
+        var submit=form.querySelector('[type="submit"]');
+        if(submit)submit.disabled=true;
+        fetch(form.action,{method:"POST",body:new FormData(form),headers:{"X-Requested-With":"XMLHttpRequest"}})
+          .then(function(response){
+            if(response.status===422)return response.text().then(function(html){throw {html:html};});
+            if(!response.ok)throw new Error("HTTP "+response.status);
+            var type=response.headers.get("content-type")||"";
+            if(type.indexOf("application/json")<0)throw new Error("Unexpected response");
+            return response.json();
+          })
+          .then(function(data){
+            var row=screen.querySelector('[data-drawer-url="'+form.action+'"]');
+            if(row&&data.patient){var name=row.querySelector("[data-row-name]");if(name)name.textContent=data.patient.name;}
+            var message=drawer.querySelector("[data-drawer-message]");
+            if(message){message.hidden=false;message.className="drawer-message success";message.textContent=data.message;}
+            setTimeout(closeDrawer,700);
+          })
+          .catch(function(error){
+            if(error.html){drawer.innerHTML=error.html;wireDrawer();return;}
+            var message=drawer.querySelector("[data-drawer-message]");
+            if(message){message.hidden=false;message.className="drawer-message error";message.textContent="تعذر حفظ التغييرات. لم تُحفظ بيانات جديدة؛ حاول مجددًا أو أغلق البطاقة.";}
+          })
+          .finally(function(){if(submit)submit.disabled=false;});
+      });
     }
     function openDrawer(url){
       if(drawerController&&drawerUrl===url)return;
@@ -165,7 +190,12 @@
       fetch(url,{headers:{"X-Requested-With":"XMLHttpRequest"},signal:controller.signal})
         .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.text();})
         .then(function(html){if(requestId!==drawerRequest)return;drawer.innerHTML=html;wireDrawer();})
-        .catch(function(error){if(requestId!==drawerRequest||error.name==="AbortError")return;drawer.innerHTML='<div class="alert alert-danger">تعذر فتح بطاقة المريض. حاول مجددًا.</div>';})
+        .catch(function(error){
+          if(requestId!==drawerRequest||error.name==="AbortError")return;
+          drawer.innerHTML='<div class="alert alert-danger">تعذر فتح بطاقة المريض. يمكنك إعادة المحاولة أو متابعة العمل في القائمة.</div><div class="drawer-actions"><button class="btn btn-primary" type="button" data-retry-drawer>إعادة المحاولة</button><button class="btn btn-secondary" type="button" data-close-drawer>إغلاق البطاقة</button></div>';
+          wireDrawer();
+          drawer.querySelector("[data-retry-drawer]").addEventListener("click",function(){openDrawer(url);});
+        })
         .finally(function(){if(requestId===drawerRequest){drawerController=null;drawerUrl="";}});
     }
     screen.querySelectorAll("[data-patient-row]").forEach(function(row){row.addEventListener("dblclick",function(event){if(event.target.closest("a,button,input,select,textarea"))return;openDrawer(row.dataset.drawerUrl);});var button=row.querySelector("[data-open-drawer]");if(button)button.addEventListener("click",function(){openDrawer(row.dataset.drawerUrl);});});

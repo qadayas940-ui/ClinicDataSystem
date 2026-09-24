@@ -199,11 +199,10 @@ def _wait_for_server(timeout=30):
 
 
 def _open_client(url):
-    """يفتح واجهة الخادم المركزي دون تشغيل قاعدة أو خادم محلي على جهاز الموظف."""
+    """افتح نافذة البرنامج مع جلسة محفوظة ولغة عربية عند كل تشغيل."""
+    start_url = url.rstrip("/") + "/start/"
     try:
         import webview
-
-        start_url = url.rstrip("/") + "/start/"
         storage_path = Path(os.environ.get("APPDATA", str(Path.home()))) / "ClinicDataSystem" / "WebView"
         storage_path.mkdir(parents=True, exist_ok=True)
         webview.create_window(cfg.WINDOW_TITLE, start_url, width=cfg.WINDOW_WIDTH, height=cfg.WINDOW_HEIGHT)
@@ -211,7 +210,7 @@ def _open_client(url):
     except Exception as exc:  # noqa: BLE001
         log_path = _write_startup_log(f"تعذر فتح نافذة العميل للخادم {url}: {exc}\n{traceback.format_exc()}")
         _show_error_dialog(f"تعذر فتح نافذة البرنامج. سيتم فتح الرابط في المتصفح:\n{url}", log_path)
-        webbrowser.open(url)
+        webbrowser.open(start_url)
 
 
 def main():
@@ -228,15 +227,15 @@ def main():
         # is applying migrations or repairing imported data.
         if "--client" in sys.argv:
             _write_startup_log("Waiting for the local clinic server client connection.")
-            if not _wait_for_server(timeout=600):
-                raise RuntimeError("انتهت مهلة انتظار خادم العيادة المحلي.")
+            if not _wait_for_server(timeout=45):
+                raise RuntimeError("تعذّر الاتصال بخادم العيادة المحلي. راجع سجل التشغيل.")
             _open_client(cfg.APP_URL)
             return
 
         if not _acquire_server_instance():
             _write_startup_log("A local server instance already owns the database; opening its client.")
-            if not _wait_for_server(timeout=600):
-                raise RuntimeError("قاعدة البيانات قيد التجهيز، وتعذر الاتصال بالخادم خلال المهلة المحددة.")
+            if not _wait_for_server(timeout=45):
+                raise RuntimeError("الخادم المحلي الحالي لا يستجيب. أغلق نسخة الخادم العالقة ثم أعد التشغيل.")
             if "--server" not in sys.argv:
                 _open_client(cfg.APP_URL)
             return
@@ -275,31 +274,11 @@ def main():
             server_thread.join()
             return
 
-        # فتح نافذة سطح المكتب
-        try:
-            import webview
-
-            webview.create_window(
-                cfg.WINDOW_TITLE,
-                cfg.APP_URL,
-                width=cfg.WINDOW_WIDTH,
-                height=cfg.WINDOW_HEIGHT,
-            )
-            webview.start()
-            server = server_holder.get("server")
-            if server:
-                server.close()
-        except Exception as exc:  # noqa: BLE001
-            message = (
-                "تعذّر فتح نافذة سطح المكتب. "
-                f"سيتم فتح النظام في المتصفح على العنوان: {cfg.APP_URL}. "
-                f"تفاصيل الخطأ: {exc}"
-            )
-            log_path = _write_startup_log(message + "\n" + traceback.format_exc())
-            print(message)
-            _show_error_dialog(message, log_path)
-            webbrowser.open(cfg.APP_URL)
-            server_thread.join()
+        # Keep the local server alive after closing the window so another
+        # launch opens a fresh client without restarting or locking the database.
+        _open_client(cfg.APP_URL)
+        _write_startup_log("Desktop window closed; local server remains ready for reopening.")
+        server_thread.join()
 
     except Exception as exc:  # noqa: BLE001
         details = traceback.format_exc()

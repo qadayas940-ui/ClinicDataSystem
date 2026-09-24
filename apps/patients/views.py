@@ -33,12 +33,12 @@ def patient_list(request, source_only=None):
         "addresses",
         Prefetch(
             "visits",
-            queryset=Visit.objects.select_related("department", "doctor_reference", "organizer_reference").order_by("-visit_date"),
+            queryset=Visit.objects.select_related("department", "doctor_reference", "organizer_reference").order_by("-visit_date")[:1],
             to_attr="_prefetched_visits",
         ),
         Prefetch(
             "source_rows",
-            queryset=SourceRow.objects.select_related("sheet").order_by("-batch_id", "-original_row_number"),
+            queryset=SourceRow.objects.select_related("sheet").order_by("-batch_id", "-original_row_number")[:1],
             to_attr="_prefetched_source_rows",
         ),
     )
@@ -184,7 +184,7 @@ def _may_edit(user):
 
 @login_required
 def patient_drawer(request, pk):
-    patient = get_object_or_404(Patient.objects.select_related("primary_name").prefetch_related("contacts", "addresses", "visits"), pk=pk)
+    patient = get_object_or_404(Patient.objects.select_related("primary_name").prefetch_related("contacts", "addresses"), pk=pk)
     can_edit = _may_edit(request.user)
     if request.method == "POST" and not can_edit:
         return JsonResponse({"ok": False, "message": "لا تملك صلاحية تعديل ملف المريض."}, status=403)

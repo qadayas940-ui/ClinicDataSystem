@@ -106,7 +106,7 @@ class Patient(SoftDeleteModel):
     @property
     def total_visit_count(self):
         """العدد المحفوظ فعلياً أو العدد التاريخي من Excel، أيهما أكبر."""
-        detailed_count = len(self._prefetched_visits) if hasattr(self, "_prefetched_visits") else self.visits.count()
+        detailed_count = self.visits.count()
         return max(detailed_count, self.imported_visit_count or 0)
 
 

@@ -50,7 +50,7 @@ pyinstaller --clean --noconfirm ClinicDataSystem.spec
 & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ClinicDataSystem.iss
 ```
 
-الناتج في `release/ClinicDataSystem-Setup-1.5.9.exe`.
+الناتج في `release/ClinicDataSystem-Setup-1.5.10.exe`.
 
 ## الاختبارات
 

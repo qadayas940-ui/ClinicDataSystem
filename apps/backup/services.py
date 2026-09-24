@@ -257,12 +257,15 @@ def create_excel_export():
     search["B3"].border = Border(bottom=Side(style="medium", color="087F73"))
     search["B3"].alignment = Alignment(horizontal="right", vertical="center")
     search.row_dimensions[3].height = 34
-    search["A4"] = "اختر الاسم"
+    search["A4"] = "اختر الاسم من السهم"
     search["A4"].font = Font(bold=True, color="062F50")
     search.merge_cells("B4:D4")
     search["B4"].fill = PatternFill("solid", fgColor="F1F7FA")
     search["B4"].alignment = Alignment(horizontal="right", vertical="center")
     search.row_dimensions[4].height = 30
+    search.merge_cells("A5:D5")
+    search["A5"] = "تظهر بطاقة أول نتيجة تلقائيًا؛ ولتغييرها اختر نتيجة من السهم أعلاه."
+    search["A5"].font = Font(color="476579", italic=True, size=10)
     search.merge_cells("B6:D6")
     search["B6"] = "الأسماء المطابقة — الاسم | الرقم التعريفي"
     search["B6"].font = Font(bold=True, color="FFFFFF")
@@ -297,7 +300,7 @@ def create_excel_export():
     search["G2"].alignment = Alignment(horizontal="center")
     search["G4"] = "الرقم التعريفي"
     search.merge_cells("H4:I4")
-    search["H4"] = '=IFERROR(TRIM(MID($B$4,FIND(" | ",$B$4)+3,99)),"")'
+    search["H4"] = '=IFERROR(TRIM(MID(IF(AND($B$4<>"",COUNTIF($B$7:$B$21,$B$4)>0),$B$4,$B$7),FIND(" | ",IF(AND($B$4<>"",COUNTIF($B$7:$B$21,$B$4)>0),$B$4,$B$7))+3,99)),"")'
     card_rows = [
         (3, "الاسم", "C", False), (5, "الجنس", "D", False),
         (6, "العمر", "E", False), (7, "العنوان", "F", False),

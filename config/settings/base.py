@@ -251,7 +251,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # معلومات التطبيق
 # ---------------------------------------------------------------------------
 APP_NAME = "نظام إدارة بيانات ومرضى العيادة"
-APP_VERSION = "1.5.9"
+APP_VERSION = "1.5.10"
 DB_SCHEMA_VERSION = "4"
 SESSION_COOKIE_NAME = "clinic_session_" + APP_VERSION.replace(".", "_")
 FACILITY_NAME = config("FACILITY_NAME", default="عيادة الموصل الخيرية")

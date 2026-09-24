@@ -148,6 +148,19 @@ class PatientWorkflowTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, patient.internal_code)
 
+    def test_drawer_with_many_visits_renders_only_recent_history(self):
+        patient = create_patient({"full_name": "مريض زيارات كثيرة للتجربة", "gender": "male", "approx_age_value": 30, "approx_age_unit": "year", "phone": "", "address": ""}, self.user)
+        for _ in range(60):
+            Visit.objects.create(patient=patient, visit_date=timezone.now(), created_by=self.user)
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("patients:drawer", args=[patient.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "60 مراجعة")
+        self.assertEqual(response.content.count(b"<article>"), 10)
+        listed = self.client.get(reverse("patients:list"))
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(patient.total_visit_count, 60)
+
     def test_patient_drawer_saves_without_server_error(self):
         patient = create_patient({"full_name": "سارة أحمد محمود علي", "gender": "female", "date_of_birth": None, "approx_age_value": 8, "approx_age_unit": "year", "phone": "07899189225", "address": "الزهور"}, self.user)
         self.client.force_login(self.user)
@@ -497,5 +510,7 @@ class ApprovedInterfaceAndExportTests(TestCase):
             self.assertEqual(str(search.merged_cells.ranges).count("B3:D3"), 1)
             self.assertIn("G2:I2", str(search.merged_cells.ranges))
             self.assertIn("FILTER", search["B7"].value)
+            self.assertIn("$B$7", search["H4"].value)
+            self.assertIn("FILTER", search["A25"].value)
             self.assertTrue(search.data_validations.dataValidation)
             book.close()
