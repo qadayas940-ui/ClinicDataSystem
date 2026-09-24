@@ -113,6 +113,14 @@ class PatientWorkflowTests(TestCase):
         self.assertEqual(visit.diagnosis, "حالة جديدة")
         self.assertFalse(ReferenceValue.objects.filter(canonical_name__in=["دكتور جديد", "منظّم جديد", "حالة جديدة"]).exists())
         self.assertFalse(Department.objects.filter(name="قسم جديد").exists())
+        with tempfile.TemporaryDirectory() as directory, override_settings(DATA_PATH=Path(directory)):
+            from apps.backup.services import create_excel_export
+            book = load_workbook(create_excel_export(), read_only=True)
+            self.assertEqual(book["المرضى"]["H2"].value, "قسم جديد")
+            self.assertEqual(book["المرضى"]["J2"].value, "دكتور جديد")
+            self.assertEqual(book["المرضى"]["K2"].value, "منظّم جديد")
+            self.assertEqual(book["المرضى"]["I2"].value, "حالة جديدة")
+            book.close()
 
     def test_doctor_choices_depend_on_department(self):
         women = Department.objects.create(name="نسائية", code="WOMEN")
@@ -471,6 +479,9 @@ class ApprovedInterfaceAndExportTests(TestCase):
         response = self.client.get(reverse("visits:list"), {"patient": patient.pk})
         self.assertContains(response, "7:00 PM")
         self.assertContains(response, "سجل الزيارات")
+        detail = self.client.get(reverse("patients:detail", args=[patient.pk]))
+        self.assertContains(detail, "سجل الزيارات")
+        self.assertContains(detail, "7:00 PM")
 
     def test_macro_free_excel_has_search_changes_and_oldest_first(self):
         first = create_patient({"full_name":"المريض الأول","gender":"male","date_of_birth":None,"approx_age_value":20,"approx_age_unit":"year","phone":"","address":""}, self.user)

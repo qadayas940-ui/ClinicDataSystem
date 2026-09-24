@@ -87,10 +87,26 @@ jobs:
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ClinicDataSystem.iss'
       - name: Verify versioned installer
         shell: pwsh
-        run: if (-not (Test-Path "release\\ClinicDataSystem-Setup-${{ steps.version.outputs.value }}.exe")) { throw "Expected versioned installer was not created." }
+        run: if (-not (Test-Path "release/ClinicDataSystem-Setup-${{ steps.version.outputs.value }}.exe")) { throw "Expected versioned installer was not created." }
       - name: Build direct ZIP
         shell: pwsh
-        run: Compress-Archive -Path "release\\ClinicDataSystem-Setup-${{ steps.version.outputs.value }}.exe" -DestinationPath "release\\ClinicDataSystem-Windows-${{ steps.version.outputs.value }}.zip" -Force
+        run: Compress-Archive -Path "release/ClinicDataSystem-Setup-${{ steps.version.outputs.value }}.exe" -DestinationPath "release/ClinicDataSystem-Windows-${{ steps.version.outputs.value }}.zip" -Force
+      - name: Verify ZIP contains installer
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression
+          $archivePath = "release/ClinicDataSystem-Windows-${{ steps.version.outputs.value }}.zip"
+          $installerPath = "release/ClinicDataSystem-Setup-${{ steps.version.outputs.value }}.exe"
+          $expected = "ClinicDataSystem-Setup-${{ steps.version.outputs.value }}.exe"
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($archivePath)
+          try {
+            $matches = @($archive.Entries | Where-Object { $_.FullName -eq $expected })
+            if ($matches.Count -ne 1) { throw "ZIP does not contain the expected installer." }
+            if ($matches[0].Length -ne (Get-Item $installerPath).Length) { throw "Installer size inside ZIP differs from EXE." }
+            Write-Host "Verified $expected inside $archivePath ($($matches[0].Length) bytes)."
+          } finally {
+            $archive.Dispose()
+          }
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
