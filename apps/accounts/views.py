@@ -1,11 +1,13 @@
 """عروض (Views) تطبيق الحسابات: تسجيل الدخول/الخروج، إعداد المالك، تغيير كلمة المرور."""
 import logging
 
-from django.conf import settings\nfrom django.contrib import messages
+from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import Http404\nfrom django.shortcuts import redirect, render
+from django.http import Http404
+from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -14,6 +16,7 @@ from apps.core.utils import get_client_ip, log_audit, owner_required
 from .forms import (
     ArabicLoginForm,
     ArabicPasswordChangeForm,
+    OwnerRecoveryForm,
     OwnerSetupForm,
     StaffUserForm,
     AccountProfileForm,
