@@ -7,7 +7,7 @@ app_name = "accounts"
 
 urlpatterns = [
     path("setup-owner/", views.setup_owner, name="setup_owner"),
-    path("login/", views.login_view, name="login"),
+    path("login/", views.login_view, name="login"),\n    path("recover-owner/", views.owner_recovery, name="owner_recovery"),
     path("logout/", views.logout_view, name="logout"),
     path("change-password/", views.change_password, name="change_password"),
     path("profile/", views.profile, name="profile"),
