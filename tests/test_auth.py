@@ -123,3 +123,26 @@ class ForcePasswordChangeTests(TestCase):
         self.assertRedirects(response, reverse("core:dashboard"))
         self.user.refresh_from_db()
         self.assertFalse(self.user.is_force_password_change)
+
+
+class OwnerRecoveryTests(TestCase):
+    def setUp(self):
+        self.owner_role = Role.objects.create(name="المالك", code=Role.CODE_OWNER)
+        self.owner = User.objects.create_user(username="old_owner", password="OldPass123", role=self.owner_role, is_staff=True, is_superuser=True)
+
+    def test_local_recovery_creates_replacement_and_keeps_old_account_inactive(self):
+        response = self.client.post(reverse("accounts:owner_recovery"), {
+            "full_name": "مالك جديد", "username": "new_owner", "email": "new@example.com",
+            "password": "NewSecurePass123", "password_confirm": "NewSecurePass123",
+            "confirm_local_access": "on",
+        }, REMOTE_ADDR="127.0.0.1")
+        self.assertRedirects(response, reverse("accounts:login"))
+        self.owner.refresh_from_db()
+        replacement = User.objects.get(username="new_owner")
+        self.assertFalse(self.owner.is_active)
+        self.assertTrue(replacement.is_owner)
+        self.assertTrue(replacement.check_password("NewSecurePass123"))
+
+    def test_recovery_is_not_available_from_network(self):
+        response = self.client.get(reverse("accounts:owner_recovery"), REMOTE_ADDR="192.168.1.20")
+        self.assertEqual(response.status_code, 404)
