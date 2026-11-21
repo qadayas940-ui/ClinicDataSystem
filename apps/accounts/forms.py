@@ -145,3 +145,42 @@ class AccountProfileForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
+
+
+class OwnerRecoveryForm(OwnerSetupForm):
+    """إنشاء مالك بديل من جهاز الخادم المحلي عند فقدان بيانات الدخول."""
+
+    confirm_local_access = forms.BooleanField(
+        label="أؤكد أنني على جهاز خادم العيادة وأن هذا الإجراء سيعطّل حسابات المالك السابقة",
+        required=True,
+    )
+
+    def clean_username(self):
+        username = self.cleaned_data["username"]
+        if User.objects.filter(username=username, is_active=True).exists():
+            raise forms.ValidationError("اسم المستخدم مستخدم من قبل. اختر اسماً آخر.")
+        return username
+
+    def save(self):
+        """تعطيل المالكين النشطين وإنشاء مالك بديل، من دون مساس ببيانات العيادة."""
+        from django.utils import timezone
+
+        data = self.cleaned_data
+        owner_role, _ = Role.objects.get_or_create(
+            code=Role.CODE_OWNER,
+            defaults={"name": "المالك", "is_system_role": True, "description": "مالك النظام بكامل الصلاحيات"},
+        )
+        User.objects.filter(role__code=Role.CODE_OWNER, is_active=True).update(
+            is_active=False, deactivated_at=timezone.now(), deactivated_by=None,
+        )
+        first_name = data["full_name"].split(" ")[0]
+        last_name = " ".join(data["full_name"].split(" ")[1:])
+        user = User(
+            username=data["username"], email=data.get("email", ""),
+            first_name=first_name, last_name=last_name, role=owner_role,
+            is_staff=True, is_superuser=True, is_active=True,
+            is_force_password_change=False,
+        )
+        user.set_password(data["password"])
+        user.save()
+        return user
