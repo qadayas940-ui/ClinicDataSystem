@@ -157,7 +157,7 @@ class OwnerRecoveryForm(OwnerSetupForm):
 
     def clean_username(self):
         username = self.cleaned_data["username"]
-        if User.objects.filter(username=username, is_active=True).exists():
+        if User.objects.filter(username=username).exists():
             raise forms.ValidationError("اسم المستخدم مستخدم من قبل. اختر اسماً آخر.")
         return username
 
