@@ -1,11 +1,11 @@
 """عروض (Views) تطبيق الحسابات: تسجيل الدخول/الخروج، إعداد المالك، تغيير كلمة المرور."""
 import logging
 
-from django.contrib import messages
+from django.conf import settings\nfrom django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.shortcuts import redirect, render
+from django.http import Http404\nfrom django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -48,6 +48,26 @@ def setup_owner(request):
     else:
         form = OwnerSetupForm()
     return render(request, "accounts/setup_owner.html", {"form": form})
+
+
+def owner_recovery(request):
+    """استعادة وصول المالك من نفس جهاز الخادم فقط.
+
+    لا تُكشف كلمة المرور السابقة ولا تُحذف بيانات المرضى. هذا المسار معطّل
+    على الرابط العام وعلى أجهزة الشبكة؛ يحتاج وصولاً فعلياً لجهاز الخادم.
+    """
+    remote_address = request.META.get("REMOTE_ADDR", "")
+    if remote_address not in {"127.0.0.1", "::1"} or settings.PUBLIC_BASE_URL:
+        raise Http404
+    if request.user.is_authenticated:
+        return redirect("core:dashboard")
+    form = OwnerRecoveryForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        user = form.save()
+        log_audit(request, "update", model_name="User", object_id=str(user.pk), object_repr="owner_recovery")
+        messages.success(request, "تم إنشاء حساب المالك الجديد وتعطيل حسابات المالك السابقة. يمكنك الآن تسجيل الدخول.")
+        return redirect("accounts:login")
+    return render(request, "accounts/owner_recovery.html", {"form": form})
 
 
 def login_view(request):
