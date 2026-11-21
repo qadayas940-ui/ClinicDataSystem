@@ -28,7 +28,7 @@ logger = logging.getLogger("clinic")
 
 def _owner_exists():
     """هل يوجد حساب مالك مُفعّل في النظام؟"""
-    return User.objects.filter(role__code="owner").exists()
+    return User.objects.filter(role__code="owner", is_active=True).exists()
 
 
 @transaction.atomic
@@ -41,7 +41,7 @@ def setup_owner(request):
     if request.method == "POST":
         form = OwnerSetupForm(request.POST)
         if form.is_valid():
-            if User.objects.select_for_update().filter(role__code="owner").exists():
+            if User.objects.select_for_update().filter(role__code="owner", is_active=True).exists():
                 messages.info(request, "أنشأ جهاز آخر حساب المالك بالفعل. يرجى تسجيل الدخول.")
                 return redirect("accounts:login")
             user = form.save()
@@ -53,6 +53,7 @@ def setup_owner(request):
     return render(request, "accounts/setup_owner.html", {"form": form})
 
 
+@transaction.atomic
 def owner_recovery(request):
     """استعادة وصول المالك من نفس جهاز الخادم فقط.
 
