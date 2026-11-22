@@ -19,7 +19,6 @@ class Patient(SoftDeleteModel):
     GENDER_CHOICES = [
         ("male", "ذكر"),
         ("female", "أنثى"),
-        ("unknown", "غير محدد"),
     ]
     AGE_UNIT_CHOICES = [
         ("year", "سنة"),
