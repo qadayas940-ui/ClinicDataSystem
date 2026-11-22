@@ -1,5 +1,5 @@
 #define MyAppName "ClinicDataSystem"
-#define MyAppVersion "1.5.12"
+#define MyAppVersion "1.5.13"
 #define MyAppPublisher "ClinicDataSystem"
 #define MyAppExeName "ClinicDataSystem.exe"
 
@@ -54,6 +54,7 @@ Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=
 [Code]
 var
   DataDirPage: TInputDirWizardPage;
+  FacilityPage: TInputQueryWizardPage;
   ServerPage: TInputQueryWizardPage;
 
 procedure InitializeWizard;
@@ -69,7 +70,7 @@ begin
   DataDirPage.Add('');
   DataDirPage.Values[0] := ExpandConstant('{localappdata}\MosulCharityClinic\Data');
   ServerPage := CreateInputQueryPage(
-    DataDirPage.ID,
+    FacilityPage.ID,
     'اتصال خادم العيادة',
     'نسخة موظف أم خادم محلي؟',
     'لنسخة الموظف أدخل رابط الخادم المركزي HTTPS أو رابط الشبكة. اتركه فارغاً فقط على جهاز الخادم المحلي.'
@@ -102,7 +103,7 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  ConfigDir, JsonPath, SafePath, SafeServer, AllowLanJson: String;
+  ConfigDir, JsonPath, SafePath, SafeServer, SafeFacility, AllowLanJson: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -115,6 +116,6 @@ begin
     SafeServer := Trim(ServerPage.Values[0]);
     StringChangeEx(SafeServer, '\', '/', True);
     if SafeServer = '' then AllowLanJson := 'true' else AllowLanJson := 'false';
-    SaveStringToFile(JsonPath, '{"data_path":"' + SafePath + '","server_url":"' + SafeServer + '","allow_lan":' + AllowLanJson + ',"port":8765,"allow_sqlite_production":true}', False);
+    SaveStringToFile(JsonPath, '{"data_path":"' + SafePath + '","server_url":"' + SafeServer + '","facility_name":"' + SafeFacility + '","allow_lan":' + AllowLanJson + ',"port":8765,"allow_sqlite_production":true}', False);
   end;
 end;
