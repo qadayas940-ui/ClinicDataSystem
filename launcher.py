@@ -96,6 +96,7 @@ def _setup_environment():
     if not secret_file.exists():
         secret_file.write_text(secrets.token_urlsafe(64), encoding="utf-8")
     os.environ.setdefault("CLINIC_DATA_PATH", str(data_path))
+    os.environ.setdefault("CLINIC_FACILITY_NAME", cfg.FACILITY_NAME)
     os.environ.setdefault("SECRET_KEY", secret_file.read_text(encoding="utf-8").strip())
     if cfg.DATABASE_URL:
         os.environ.setdefault("DATABASE_URL", cfg.DATABASE_URL)
