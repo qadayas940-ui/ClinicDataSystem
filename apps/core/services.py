@@ -10,7 +10,7 @@ def reset_clinic_data():
     المرجعية والأقسام. لا تُحذف جداول النظام أو المستخدمون أو الصلاحيات.
     """
     from apps.core.models import Department, Notification, ReferenceValue
-    from apps.eyeclinic.models import EyeClinicVisit
+    from apps.ophthalmology.models import EyeClinicVisit
     from apps.importer.models import (
         DataIssue, ImportBatch, ImportFile, ImportSheet, MatchCandidate,
         MergeDecision, ReviewDecision, SourceRow,
