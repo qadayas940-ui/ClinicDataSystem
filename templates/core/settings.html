@@ -12,3 +12,14 @@
   <a class="settings-card" href="{% url 'updater:list' %}"><b>التحديثات</b><span>إصدار البرنامج والتحديثات المتاحة</span></a>
 </div>
 {% endblock %}
+
+<section class="panel danger-panel" style="margin-top:1.5rem;border:1px solid #e6a2a2;">
+  <h2>تهيئة بيانات جديدة</h2>
+  <p>تمسح هذه العملية المرضى والزيارات والمختبر والإحالات والاستيراد والأقسام والقوائم المرجعية فقط. لا تحذف قاعدة البيانات أو الحسابات أو الصلاحيات أو النسخ الاحتياطية.</p>
+  <form method="post" action="{% url 'core:reset_clinic_data' %}" onsubmit="return confirm('سيتم إفراغ بيانات العيادة مع إبقاء القاعدة والحسابات. هل تريد المتابعة؟');">
+    {% csrf_token %}
+    <label for="reset-confirmation">اكتب RESET-CLINIC-DATA للتأكيد</label>
+    <input id="reset-confirmation" name="confirmation" required pattern="RESET-CLINIC-DATA" autocomplete="off" placeholder="RESET-CLINIC-DATA">
+    <button class="btn btn-danger" type="submit">تهيئة بيانات جديدة</button>
+  </form>
+</section>
