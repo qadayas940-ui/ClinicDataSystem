@@ -17,6 +17,11 @@ def backup_list(request):
 
 
 @owner_required
+def export_choice(request):
+    return render(request, "backup/export_choice.html")
+
+
+@owner_required
 def backup_create(request):
     if request.method == "POST":
         try:
