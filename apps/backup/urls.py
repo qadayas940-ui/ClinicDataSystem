@@ -6,6 +6,7 @@ app_name = "backup"
 urlpatterns = [
     path("", views.backup_list, name="list"),
     path("create/", views.backup_create, name="create"),
+    path("export/", views.export_choice, name="export_choice"),
     path("<int:pk>/download/", views.backup_download, name="download"),
     path("export/excel/", views.excel_export, name="excel_export"),
     path("export/csv/", views.csv_export, name="csv_export"),
