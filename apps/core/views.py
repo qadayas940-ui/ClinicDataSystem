@@ -401,3 +401,23 @@ def server_settings(request):
         "form": form, "server": server, "lan_url": lan_urls[0], "lan_urls": lan_urls,
         "public_url": getattr(settings, "PUBLIC_BASE_URL", ""),
     })
+
+
+@owner_required
+@require_POST
+def reset_clinic_data(request):
+    """تهيئة بيانات جديدة مع إبقاء القاعدة والحسابات."""
+    confirmation = request.POST.get("confirmation", "").strip()
+    if confirmation != "RESET-CLINIC-DATA":
+        messages.error(request, "اكتب عبارة التأكيد المطلوبة حرفياً قبل تنفيذ التهيئة.")
+        return redirect("core:settings")
+    try:
+        from .services import reset_clinic_data as reset_service
+        deleted = reset_service()
+        total = sum(deleted.values())
+        log_audit(request, "reset", "ClinicData", 0, f"تمت تهيئة {total} سجلاً")
+        messages.success(request, f"تمت تهيئة بيانات العيادة بنجاح. أُزيل {total} سجلاً، وبقيت القاعدة والحسابات والنسخ الاحتياطية.")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("فشل تهيئة بيانات العيادة")
+        messages.error(request, f"تعذرت التهيئة: {exc}")
+    return redirect("core:settings")
