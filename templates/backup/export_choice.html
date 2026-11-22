@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}اختيار نوع التصدير{% endblock %}
+{% block content %}
+<section class="page-head"><div><h1>اختيار نوع التصدير</h1><p>اختر الامتداد المناسب. سيُحفظ الملف تلقائياً في مجلد الامتداد الخاص به.</p></div></section>
+<div class="settings-grid export-choices">
+  <a class="settings-card" href="{% url 'backup:excel_export' %}"><b>Excel (.xlsx)</b><span>جداول قابلة للفرز والتصفية، بدون ماكرو.</span></a>
+  <a class="settings-card" href="{% url 'backup:csv_export' %}"><b>CSV ZIP</b><span>ملفات CSV مضغوطة للتبادل مع الأنظمة الأخرى.</span></a>
+  <a class="settings-card" href="{% url 'backup:json_export' %}"><b>JSON</b><span>نسخة منظمة للاستخدام البرمجي والدمج.</span></a>
+  <a class="settings-card" href="{% url 'backup:create' %}" onclick="event.preventDefault(); document.getElementById('full-backup').submit();"><b>نسخة احتياطية كاملة</b><span>ملف استعادة كامل بامتداد clinicbackup.</span></a>
+</div>
+<form id="full-backup" method="post" action="{% url 'backup:create' %}" hidden>{% csrf_token %}</form>
+{% endblock %}
