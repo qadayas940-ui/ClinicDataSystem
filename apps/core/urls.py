@@ -27,4 +27,5 @@ urlpatterns = [
     path("settings/references/<int:pk>/edit/", views.reference_form, name="reference_edit"),
     path("settings/references/<int:pk>/archive/", views.reference_archive, name="reference_archive"),
     path("settings/references/<int:pk>/restore/", views.reference_restore, name="reference_restore"),
+    path("settings/reset-data/", views.reset_clinic_data, name="reset_clinic_data"),
 ]
