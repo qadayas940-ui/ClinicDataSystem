@@ -52,6 +52,7 @@ THREADS = max(8, min(32, int(os.environ.get("CLINIC_SERVER_THREADS", "24"))))
 DATABASE_URL = os.environ.get("DATABASE_URL") or DESKTOP_CONFIG.get("database_url", "")
 ALLOW_SQLITE_PRODUCTION = bool(DESKTOP_CONFIG.get("allow_sqlite_production", not DATABASE_URL))
 REMOTE_SERVER_URL = (os.environ.get("CLINIC_SERVER_URL") or DESKTOP_CONFIG.get("server_url", "")).strip().rstrip("/")
+FACILITY_NAME = (os.environ.get("CLINIC_FACILITY_NAME") or DESKTOP_CONFIG.get("facility_name") or "عيادة الموصل الخيرية").strip()
 
 # عنوان الواجهة
 APP_URL = REMOTE_SERVER_URL or f"http://127.0.0.1:{PORT}"
