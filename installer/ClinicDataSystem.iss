@@ -123,6 +123,8 @@ begin
     StringChangeEx(SafePath, '\', '/', True);
     SafeServer := Trim(ServerPage.Values[0]);
     StringChangeEx(SafeServer, '\', '/', True);
+    SafeFacility := Trim(FacilityPage.Values[0]);
+    StringChangeEx(SafeFacility, '"', '', True);
     if SafeServer = '' then AllowLanJson := 'true' else AllowLanJson := 'false';
     SaveStringToFile(JsonPath, '{"data_path":"' + SafePath + '","server_url":"' + SafeServer + '","facility_name":"' + SafeFacility + '","allow_lan":' + AllowLanJson + ',"port":8765,"allow_sqlite_production":true}', False);
   end;
