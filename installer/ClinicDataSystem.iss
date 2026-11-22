@@ -69,6 +69,14 @@ begin
   );
   DataDirPage.Add('');
   DataDirPage.Values[0] := ExpandConstant('{localappdata}\MosulCharityClinic\Data');
+  FacilityPage := CreateInputQueryPage(
+    DataDirPage.ID,
+    'اسم العيادة أو المشروع',
+    'اكتب الاسم الذي سيظهر داخل البرنامج',
+    'يمكن تغييره لاحقاً من إعدادات التشغيل.'
+  );
+  FacilityPage.Add('اسم العيادة:', False);
+  FacilityPage.Values[0] := 'عيادة الموصل الخيرية';
   ServerPage := CreateInputQueryPage(
     FacilityPage.ID,
     'اتصال خادم العيادة',
