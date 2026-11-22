@@ -37,7 +37,7 @@ class Patient(SoftDeleteModel):
         blank=True,
         related_name="primary_for",
     )
-    gender = models.CharField("الجنس", max_length=10, choices=GENDER_CHOICES, default="unknown")
+    gender = models.CharField("الجنس", max_length=10, choices=GENDER_CHOICES, default="male")
     date_of_birth = models.DateField("تاريخ الميلاد", null=True, blank=True)
     approx_age_value = models.PositiveIntegerField("العمر التقريبي", null=True, blank=True)
     approx_age_unit = models.CharField("وحدة العمر", max_length=10, choices=AGE_UNIT_CHOICES, blank=True, default="")
